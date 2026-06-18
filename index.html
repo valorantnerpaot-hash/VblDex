@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>VBL Casino</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header class="header">
+  <div class="header-logo">
+    <span class="logo-icon">♠</span>
+    <span class="logo-text">VBL <span class="logo-accent">Casino</span></span>
+  </div>
+  <div class="header-balance">
+    <span class="balance-label">Баланс</span>
+    <span class="balance-value" id="balanceDisplay">—</span>
+    <span class="balance-unit">VBL</span>
+  </div>
+  <div class="header-rank" id="rankDisplay">⏳</div>
+</header>
+
+<!-- ══════════════ SCREENS ══════════════ -->
+
+<!-- LOBBY -->
+<div class="screen active" id="screen-lobby">
+  <div class="lobby-tagline">Сыграй. Выиграй. <span class="text-gold">Стань легендой.</span></div>
+  <div class="games-grid">
+
+    <div class="game-card" onclick="openGame('slots')">
+      <div class="game-card-glow purple"></div>
+      <div class="game-icon">🎰</div>
+      <div class="game-name">Слоты</div>
+      <div class="game-sub">До 50× ставки</div>
+      <div class="game-badge hot">🔥 Хит</div>
+    </div>
+
+    <div class="game-card" onclick="openGame('dice')">
+      <div class="game-card-glow emerald"></div>
+      <div class="game-icon">🎲</div>
+      <div class="game-name">Кости</div>
+      <div class="game-sub">5× за точное попадание</div>
+      <div class="game-badge new">✨ Новинка</div>
+    </div>
+
+    <div class="game-card" onclick="openGame('roulette')">
+      <div class="game-card-glow gold"></div>
+      <div class="game-icon">🎡</div>
+      <div class="game-name">Рулетка</div>
+      <div class="game-sub">До 36× ставки</div>
+    </div>
+
+    <div class="game-card locked">
+      <div class="game-card-glow dark"></div>
+      <div class="game-icon">🃏</div>
+      <div class="game-name">Блэкджек</div>
+      <div class="game-sub">Скоро</div>
+      <div class="game-badge soon">🔒 Скоро</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SLOTS GAME -->
+<div class="screen" id="screen-slots">
+  <button class="back-btn" onclick="goLobby()">← Назад</button>
+  <h2 class="screen-title">🎰 Слоты</h2>
+
+  <div class="slots-machine">
+    <div class="slots-frame">
+      <div class="slots-reels" id="slotsReels">
+        <div class="reel-wrapper">
+          <div class="reel-strip" id="reel0"></div>
+        </div>
+        <div class="reel-divider"></div>
+        <div class="reel-wrapper">
+          <div class="reel-strip" id="reel1"></div>
+        </div>
+        <div class="reel-divider"></div>
+        <div class="reel-wrapper">
+          <div class="reel-strip" id="reel2"></div>
+        </div>
+      </div>
+      <div class="slots-win-line"></div>
+    </div>
+    <div class="slots-result-msg" id="slotsResultMsg"></div>
+  </div>
+
+  <div class="bet-section">
+    <div class="bet-label">Ставка (VBL-Coins)</div>
+    <div class="bet-controls">
+      <button class="bet-btn" onclick="changeBet(-500)">−500</button>
+      <input class="bet-input" id="slotsBet" type="number" value="100" min="10" max="100000" />
+      <button class="bet-btn" onclick="changeBet(500)">+500</button>
+    </div>
+    <div class="bet-presets">
+      <button class="preset-btn" onclick="setBet(100)">100</button>
+      <button class="preset-btn" onclick="setBet(500)">500</button>
+      <button class="preset-btn" onclick="setBet(1000)">1К</button>
+      <button class="preset-btn" onclick="setBet(5000)">5К</button>
+      <button class="preset-btn" onclick="setBet(10000)">10К</button>
+    </div>
+  </div>
+
+  <button class="spin-btn" id="spinBtn" onclick="playSlotsGame()">
+    <span class="spin-btn-text">КРУТИТЬ</span>
+    <span class="spin-btn-sub">Нажми и испытай удачу</span>
+  </button>
+
+  <div class="paytable">
+    <div class="paytable-title">Таблица выплат</div>
+    <div class="paytable-row"><span>💎💎💎</span><span class="pt-mult">×50</span></div>
+    <div class="paytable-row"><span>7️⃣7️⃣7️⃣</span><span class="pt-mult">×20</span></div>
+    <div class="paytable-row"><span>🍀🍀🍀</span><span class="pt-mult">×10</span></div>
+    <div class="paytable-row"><span>⭐⭐⭐</span><span class="pt-mult">×5</span></div>
+    <div class="paytable-row"><span>🔔🔔🔔</span><span class="pt-mult">×3</span></div>
+    <div class="paytable-row"><span>🍋🍋🍋</span><span class="pt-mult">×2</span></div>
+    <div class="paytable-row"><span>🍒🍒🍒</span><span class="pt-mult">×1.5</span></div>
+    <div class="paytable-row"><span>Любая пара</span><span class="pt-mult">×0.5</span></div>
+  </div>
+</div>
+
+<!-- DICE GAME -->
+<div class="screen" id="screen-dice">
+  <button class="back-btn" onclick="goLobby()">← Назад</button>
+  <h2 class="screen-title">🎲 Кости</h2>
+
+  <div class="dice-arena">
+    <canvas id="diceCanvas" width="200" height="200"></canvas>
+    <div class="dice-result-display" id="diceResultDisplay">?</div>
+  </div>
+
+  <div class="dice-choose">
+    <div class="dice-choose-label">Выбери число:</div>
+    <div class="dice-numbers" id="diceNumbers">
+      <button class="dice-num-btn" onclick="chooseDiceNum(this, 1)">1</button>
+      <button class="dice-num-btn" onclick="chooseDiceNum(this, 2)">2</button>
+      <button class="dice-num-btn" onclick="chooseDiceNum(this, 3)">3</button>
+      <button class="dice-num-btn" onclick="chooseDiceNum(this, 4)">4</button>
+      <button class="dice-num-btn" onclick="chooseDiceNum(this, 5)">5</button>
+      <button class="dice-num-btn" onclick="chooseDiceNum(this, 6)">6</button>
+    </div>
+  </div>
+
+  <div class="bet-section">
+    <div class="bet-label">Ставка (VBL-Coins)</div>
+    <div class="bet-controls">
+      <button class="bet-btn" onclick="changeDiceBet(-500)">−500</button>
+      <input class="bet-input" id="diceBet" type="number" value="100" min="10" max="100000" />
+      <button class="bet-btn" onclick="changeDiceBet(500)">+500</button>
+    </div>
+    <div class="bet-presets">
+      <button class="preset-btn" onclick="setDiceBet(100)">100</button>
+      <button class="preset-btn" onclick="setDiceBet(500)">500</button>
+      <button class="preset-btn" onclick="setDiceBet(1000)">1К</button>
+      <button class="preset-btn" onclick="setDiceBet(5000)">5К</button>
+    </div>
+  </div>
+
+  <button class="spin-btn emerald" id="diceRollBtn" onclick="playDiceGame()">
+    <span class="spin-btn-text">БРОСИТЬ КОСТЬ</span>
+    <span class="spin-btn-sub">Угадай число — выиграй 5×</span>
+  </button>
+  <div class="slots-result-msg" id="diceResultMsg"></div>
+</div>
+
+<!-- ROULETTE GAME -->
+<div class="screen" id="screen-roulette">
+  <button class="back-btn" onclick="goLobby()">← Назад</button>
+  <h2 class="screen-title">🎡 Рулетка</h2>
+
+  <div class="roulette-arena">
+    <canvas id="rouletteCanvas" width="260" height="260"></canvas>
+    <div class="roulette-ball" id="rouletteBall"></div>
+    <div class="roulette-result" id="rouletteResult">?</div>
+  </div>
+
+  <div class="roulette-bets">
+    <div class="roulette-colors">
+      <button class="color-btn red" id="betRed" onclick="setRouletteColor('red')">🔴 Красное</button>
+      <button class="color-btn black" id="betBlack" onclick="setRouletteColor('black')">⚫ Чёрное</button>
+    </div>
+    <div class="roulette-hint">или поставь на число 0–36</div>
+    <div class="roulette-number-input">
+      <input type="number" id="rouletteNumber" placeholder="Число 0–36" min="0" max="36" onchange="setRouletteNumber(this.value)" />
+    </div>
+  </div>
+
+  <div class="bet-section">
+    <div class="bet-label">Ставка (VBL-Coins)</div>
+    <div class="bet-controls">
+      <button class="bet-btn" onclick="changeRouletteBet(-500)">−500</button>
+      <input class="bet-input" id="rouletteBet" type="number" value="100" min="10" max="100000" />
+      <button class="bet-btn" onclick="changeRouletteBet(500)">+500</button>
+    </div>
+  </div>
+
+  <button class="spin-btn gold" id="rouletteSpinBtn" onclick="playRouletteGame()">
+    <span class="spin-btn-text">ВРАЩАТЬ</span>
+    <span class="spin-btn-sub">Красное/Чёрное ×2 | Число ×36</span>
+  </button>
+  <div class="slots-result-msg" id="rouletteResultMsg"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
