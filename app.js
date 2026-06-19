@@ -662,7 +662,7 @@ async function playRouletteGame() {
 
     if (t < 1) {
       rouletteAnimFrame = requestAnimationFrame(decelFrame);
-    } else {
+    } else { rouletteAngle = 0;
       const colorLabel = result.result_color === "red" ? "🔴" : result.result_color === "black" ? "⚫" : "🟢";
       document.getElementById("rouletteResult").textContent = result.spin_result;
       document.getElementById("rouletteResult").style.color =
