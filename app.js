@@ -7,7 +7,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const BACKEND = "https://cuddly-lines-run.loca.lt"; // localtunnel backend URL
+const BACKEND = "https://cuddly-lines-run.loca.lt"; // ← твой localtunnel URL
 const SYMBOLS = ["💎","7️⃣","🍀","⭐","🔔","🍋","🍒"];
 
 let balance      = 0;
@@ -20,6 +20,46 @@ let rouletteBetValue = null;
 // ══════════════ INIT ══════════════
 
 async function init() {
+  console.log("[VBL] init() started");
+  console.log("[VBL] tg.initData length:", tg.initData?.length ?? 0);
+  console.log("[VBL] BACKEND:", BACKEND);
+
+  // Шаг 1: проверяем доступность бэкенда через /api/ping (не требует auth)
+  try {
+    const pingRes = await fetch(BACKEND + "/api/ping", {
+      headers: { "bypass-tunnel-reminder": "true" }
+    });
+    const pingText = await pingRes.text();
+    console.log("[VBL] /api/ping status:", pingRes.status);
+    console.log("[VBL] /api/ping body (first 200):", pingText.slice(0, 200));
+  } catch(e) {
+    console.error("[VBL] /api/ping FAILED — туннель недоступен!", e.message);
+    updateBalanceUI(0, "💀");
+    return;
+  }
+
+  // Шаг 2: проверяем echo с нашими заголовками
+  try {
+    const echoRes = await fetch(BACKEND + "/api/echo", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Init-Data": initData,
+        "bypass-tunnel-reminder": "true",
+      },
+      body: JSON.stringify({ test: true })
+    });
+    const echoData = await echoRes.json();
+    console.log("[VBL] /api/echo X-Init-Data_present:", echoData["X-Init-Data_present"]);
+    console.log("[VBL] /api/echo X-Init-Data_length:", echoData["X-Init-Data_length"]);
+    if (!echoData["X-Init-Data_present"]) {
+      console.error("[VBL] Заголовок X-Init-Data НЕ дошёл до сервера! Проблема в туннеле или CORS.");
+    }
+  } catch(e) {
+    console.error("[VBL] /api/echo failed:", e.message);
+  }
+
+  // Шаг 3: основной запрос баланса
   await fetchBalance();
 }
 
@@ -28,7 +68,9 @@ async function fetchBalance() {
     const res = await apiFetch("/api/balance", "GET");
     balance = res.balance;
     updateBalanceUI(res.balance, res.rank_emoji);
+    console.log("[VBL] Balance loaded:", res.balance);
   } catch(e) {
+    console.error("[VBL] fetchBalance error:", e.message);
     updateBalanceUI(0, "❓");
   }
 }
@@ -51,21 +93,26 @@ async function apiFetch(path, method = "GET", body = null) {
     headers: {
       "Content-Type": "application/json",
       "X-Init-Data": initData,
-      // Required to bypass localtunnel splash page
       "bypass-tunnel-reminder": "true",
     },
   };
   if (body) opts.body = JSON.stringify(body);
+  console.log(`[VBL] fetch ${method} ${BACKEND + path}`);
   const res = await fetch(BACKEND + path, opts);
-  // localtunnel can return HTML instead of JSON on first hit
+
+  // Защита от HTML-ответа (localtunnel splash page)
   const text = await res.text();
   let data;
-  try { data = JSON.parse(text); }
-  catch {
-    console.error("Non-JSON from backend:", text.slice(0, 300));
+  try {
+    data = JSON.parse(text);
+  } catch {
+    console.error("[VBL] Non-JSON response (splice page?):", text.slice(0, 300));
     throw new Error("Бэкенд вернул не JSON — проверь туннель.");
   }
-  if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+  if (!res.ok) {
+    console.error(`[VBL] API error ${res.status}:`, data);
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
   return data;
 }
 
