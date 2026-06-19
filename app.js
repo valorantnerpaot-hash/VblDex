@@ -94,6 +94,7 @@ async function apiFetch(path, method = "GET", body = null) {
       "Content-Type": "application/json",
       "X-Init-Data": initData,
       "bypass-tunnel-reminder": "true",
+      "ngrok-skip-browser-warning": "true",
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -194,7 +195,7 @@ async function playSlotsGame() {
 
   let result;
   try {
-    result = await apiFetch("/api/play/slots", "POST", { bet });
+    result = await ("/api/play/slots", "POST", { bet });
   } catch(e) {
     showToast(e.message, "lose");
     for (let i = 0; i < 3; i++) clearInterval(intervals[i]);
@@ -337,7 +338,7 @@ async function playDiceGame() {
 
   let result;
   try {
-    result = await apiFetch("/api/play/dice", "POST", { bet, chosen: diceChosen });
+    result = await ("/api/play/dice", "POST", { bet, chosen: diceChosen });
   } catch(e) {
     showToast(e.message, "lose");
     stopDiceAnim();
