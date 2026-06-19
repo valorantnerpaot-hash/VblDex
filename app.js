@@ -7,7 +7,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const BACKEND = "https://cuddly-lines-run.loca.lt";
+const BACKEND = "https://cuddly-lines-run.loca.lt"; // localtunnel backend URL
 const SYMBOLS = ["💎","7️⃣","🍀","⭐","🔔","🍋","🍒"];
 
 let balance      = 0;
@@ -51,12 +51,21 @@ async function apiFetch(path, method = "GET", body = null) {
     headers: {
       "Content-Type": "application/json",
       "X-Init-Data": initData,
+      // Required to bypass localtunnel splash page
+      "bypass-tunnel-reminder": "true",
     },
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(BACKEND + path, opts);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Server error");
+  // localtunnel can return HTML instead of JSON on first hit
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); }
+  catch {
+    console.error("Non-JSON from backend:", text.slice(0, 300));
+    throw new Error("Бэкенд вернул не JSON — проверь туннель.");
+  }
+  if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
   return data;
 }
 
