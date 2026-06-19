@@ -7,7 +7,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const BACKEND = "https://sponge-chatroom-reforest.ngrok-free.dev"; // ← твой localtunnel URL
+const BACKEND = "https://sponge-chatroom-reforest.ngrok-free.dev";
 const SYMBOLS = ["💎","7️⃣","🍀","⭐","🔔","🍋","🍒"];
 
 let balance      = 0;
@@ -17,17 +17,14 @@ let diceChosen   = null;
 let rouletteBetType  = null;
 let rouletteBetValue = null;
 
-// ══════════════ INIT ══════════════
-
 async function init() {
   console.log("[VBL] init() started");
   console.log("[VBL] tg.initData length:", tg.initData?.length ?? 0);
   console.log("[VBL] BACKEND:", BACKEND);
 
-  // Шаг 1: проверяем доступность бэкенда через /api/ping (не требует auth)
   try {
     const pingRes = await fetch(BACKEND + "/api/ping", {
-      headers: { "bypass-tunnel-reminder": "true" }
+      headers: { "bypass-tunnel-reminder": "true", "ngrok-skip-browser-warning": "true" }
     });
     const pingText = await pingRes.text();
     console.log("[VBL] /api/ping status:", pingRes.status);
@@ -38,7 +35,6 @@ async function init() {
     return;
   }
 
-  // Шаг 2: проверяем echo с нашими заголовками
   try {
     const echoRes = await fetch(BACKEND + "/api/echo", {
       method: "POST",
@@ -46,6 +42,7 @@ async function init() {
         "Content-Type": "application/json",
         "X-Init-Data": initData,
         "bypass-tunnel-reminder": "true",
+        "ngrok-skip-browser-warning": "true",
       },
       body: JSON.stringify({ test: true })
     });
@@ -53,13 +50,12 @@ async function init() {
     console.log("[VBL] /api/echo X-Init-Data_present:", echoData["X-Init-Data_present"]);
     console.log("[VBL] /api/echo X-Init-Data_length:", echoData["X-Init-Data_length"]);
     if (!echoData["X-Init-Data_present"]) {
-      console.error("[VBL] Заголовок X-Init-Data НЕ дошёл до сервера! Проблема в туннеле или CORS.");
+      console.error("[VBL] Заголовок X-Init-Data НЕ дошёл до сервера!");
     }
   } catch(e) {
     console.error("[VBL] /api/echo failed:", e.message);
   }
 
-  // Шаг 3: основной запрос баланса
   await fetchBalance();
 }
 
@@ -85,8 +81,6 @@ function fmtNum(n) {
   return Number(n).toLocaleString("ru-RU");
 }
 
-// ══════════════ API ══════════════
-
 async function apiFetch(path, method = "GET", body = null) {
   const opts = {
     method,
@@ -101,13 +95,12 @@ async function apiFetch(path, method = "GET", body = null) {
   console.log(`[VBL] fetch ${method} ${BACKEND + path}`);
   const res = await fetch(BACKEND + path, opts);
 
-  // Защита от HTML-ответа (localtunnel splash page)
   const text = await res.text();
   let data;
   try {
     data = JSON.parse(text);
   } catch {
-    console.error("[VBL] Non-JSON response (splice page?):", text.slice(0, 300));
+    console.error("[VBL] Non-JSON response:", text.slice(0, 300));
     throw new Error("Бэкенд вернул не JSON — проверь туннель.");
   }
   if (!res.ok) {
@@ -117,13 +110,11 @@ async function apiFetch(path, method = "GET", body = null) {
   return data;
 }
 
-// ══════════════ NAVIGATION ══════════════
-
 function openGame(name) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
-  if (name === "slots")   initSlots();
-  if (name === "dice")    initDice();
+  if (name === "slots")    initSlots();
+  if (name === "dice")     initDice();
   if (name === "roulette") initRoulette();
 }
 
@@ -131,8 +122,6 @@ function goLobby() {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-lobby").classList.add("active");
 }
-
-// ══════════════ TOAST ══════════════
 
 let toastTimer;
 function showToast(msg, type = "info") {
@@ -153,7 +142,6 @@ function initSlots() {
   for (let i = 0; i < 3; i++) {
     const strip = document.getElementById("reel" + i);
     strip.innerHTML = "";
-    // Fill with random symbols for visual
     for (let j = 0; j < 3; j++) {
       const sym = document.createElement("div");
       sym.className = "reel-symbol";
@@ -187,7 +175,6 @@ async function playSlotsGame() {
   msg.textContent = "🎰 Крутим...";
   msg.className = "slots-result-msg";
 
-  // Start spinning animation
   const intervals = [null, null, null];
   for (let i = 0; i < 3; i++) {
     intervals[i] = startReelSpin(i);
@@ -195,7 +182,7 @@ async function playSlotsGame() {
 
   let result;
   try {
-    result = await ("/api/play/slots", "POST", { bet });
+    result = await apiFetch("/api/play/slots", "POST", { bet });
   } catch(e) {
     showToast(e.message, "lose");
     for (let i = 0; i < 3; i++) clearInterval(intervals[i]);
@@ -204,7 +191,6 @@ async function playSlotsGame() {
     return;
   }
 
-  // Stop reels one by one with delay
   const finalReels = result.reels;
   for (let i = 0; i < 3; i++) {
     await delay(350 + i * 300);
@@ -213,8 +199,6 @@ async function playSlotsGame() {
   }
 
   await delay(300);
-
-  // Show result
   updateBalanceUI(result.new_balance, null);
 
   if (result.win_type === "triple") {
@@ -239,11 +223,7 @@ async function playSlotsGame() {
 function startReelSpin(index) {
   const strip = document.getElementById("reel" + index);
   return setInterval(() => {
-    const sym = document.createElement("div");
-    sym.className = "reel-symbol";
-    sym.textContent = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
-    // Replace middle symbol
-    if (strip.children[1]) strip.children[1].textContent = sym.textContent;
+    if (strip.children[1]) strip.children[1].textContent = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
     if (strip.children[0]) strip.children[0].textContent = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
     if (strip.children[2]) strip.children[2].textContent = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
   }, 60 + index * 20);
@@ -251,12 +231,9 @@ function startReelSpin(index) {
 
 function stopReel(index, symbol) {
   const strip = document.getElementById("reel" + index);
-  // Set center symbol to the real result
   if (strip.children[0]) strip.children[0].textContent = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
   if (strip.children[1]) strip.children[1].textContent = symbol;
   if (strip.children[2]) strip.children[2].textContent = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
-
-  // Flash effect
   strip.style.filter = "brightness(1.6)";
   setTimeout(() => { strip.style.filter = ""; }, 200);
 }
@@ -331,14 +308,13 @@ async function playDiceGame() {
   msg.className = "slots-result-msg";
   document.getElementById("diceResultDisplay").textContent = "";
 
-  // Start spinning animation
   diceSettled = false;
   diceSpinSpeed = { x: 8 + Math.random() * 6, y: 12 + Math.random() * 8 };
   animateDiceSpin();
 
   let result;
   try {
-    result = await ("/api/play/dice", "POST", { bet, chosen: diceChosen });
+    result = await apiFetch("/api/play/dice", "POST", { bet, chosen: diceChosen });
   } catch(e) {
     showToast(e.message, "lose");
     stopDiceAnim();
@@ -346,7 +322,6 @@ async function playDiceGame() {
     return;
   }
 
-  // Slow down and land on result
   await delay(800);
   slowDownDice(result.result, () => {
     document.getElementById("diceResultDisplay").textContent = result.result;
@@ -368,7 +343,6 @@ async function playDiceGame() {
 
 function animateDiceSpin() {
   if (diceAnimFrame) cancelAnimationFrame(diceAnimFrame);
-
   function frame() {
     if (diceSettled) return;
     diceAngle.x += diceSpinSpeed.x;
@@ -393,13 +367,11 @@ function slowDownDice(targetFace, callback) {
     diceAngle.x += diceSpinSpeed.x;
     diceAngle.y += diceSpinSpeed.y;
     drawDice3D(targetFace, diceAngle.x, diceAngle.y);
-
     if (frames < totalFrames) {
       diceAnimFrame = requestAnimationFrame(decel);
     } else {
       diceSettled = true;
       diceFace = targetFace;
-      // Snap to clean angle for visibility
       diceAngle = { x: 20, y: 30 };
       drawDice3D(targetFace, 20, 30);
       if (callback) callback();
@@ -426,12 +398,9 @@ function drawDice3D(face, rotX = 20, rotY = 30) {
   const rx = (rotX * Math.PI) / 180;
   const ry = (rotY * Math.PI) / 180;
 
-  // Project 3D cube vertices
   function project([x, y, z]) {
-    // Rotate Y
     const x1 = x * Math.cos(ry) + z * Math.sin(ry);
     const z1 = -x * Math.sin(ry) + z * Math.cos(ry);
-    // Rotate X
     const y2 = y * Math.cos(rx) - z1 * Math.sin(rx);
     const z2 = y * Math.sin(rx) + z1 * Math.cos(rx);
     const fov = 5;
@@ -445,23 +414,19 @@ function drawDice3D(face, rotX = 20, rotY = 30) {
   ].map(project);
 
   const faces = [
-    { verts:[0,1,2,3], normal:[0,0,-1], face:1, color:"#1E1E36" },
-    { verts:[4,5,6,7], normal:[0,0,1],  face:6, color:"#22223A" },
-    { verts:[0,1,5,4], normal:[0,-1,0], face:2, color:"#1A1A30" },
-    { verts:[2,3,7,6], normal:[0,1,0],  face:5, color:"#1C1C34" },
-    { verts:[0,3,7,4], normal:[-1,0,0], face:3, color:"#1E1E38" },
-    { verts:[1,2,6,5], normal:[1,0,0],  face:4, color:"#20203C" },
+    { verts:[0,1,2,3], normal:[0,0,-1], face:1 },
+    { verts:[4,5,6,7], normal:[0,0,1],  face:6 },
+    { verts:[0,1,5,4], normal:[0,-1,0], face:2 },
+    { verts:[2,3,7,6], normal:[0,1,0],  face:5 },
+    { verts:[0,3,7,4], normal:[-1,0,0], face:3 },
+    { verts:[1,2,6,5], normal:[1,0,0],  face:4 },
   ];
 
-  // Sort by average Z (painter's algorithm)
-  faces.forEach(f => {
-    f.avgZ = f.verts.reduce((s,i) => s + v[i][2], 0) / 4;
-  });
+  faces.forEach(f => { f.avgZ = f.verts.reduce((s,i) => s + v[i][2], 0) / 4; });
   faces.sort((a, b) => a.avgZ - b.avgZ);
 
   for (const f of faces) {
     const pts = f.verts.map(i => v[i]);
-    // Lighting
     const lightDir = [0.5, -0.8, 0.3];
     const n = f.normal;
     const dot = Math.max(0, n[0]*lightDir[0] + n[1]*lightDir[1] + n[2]*lightDir[2]);
@@ -472,17 +437,13 @@ function drawDice3D(face, rotX = 20, rotY = 30) {
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     ctx.closePath();
 
-    // Face fill with gradient-like color
     const r = Math.round(30 * brightness), g = Math.round(30 * brightness), b = Math.round(60 * brightness + 10);
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fill();
-
-    // Border glow
     ctx.strokeStyle = `rgba(155, 89, 255, ${0.4 * brightness})`;
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Draw dots on face
     drawDiceDots(ctx, pts, f.face === face ? face : f.face, brightness);
   }
 }
@@ -491,7 +452,6 @@ function drawDiceDots(ctx, pts, face, brightness) {
   const dots = DICE_DOTS[face] || [];
   if (!dots.length) return;
 
-  // Bilinear interpolation for dot positions on the face quad
   function lerp(a, b, t) { return a + (b - a) * t; }
   function bilinear(u, v) {
     const top    = [lerp(pts[0][0], pts[1][0], u), lerp(pts[0][1], pts[1][1], u)];
@@ -502,9 +462,8 @@ function drawDiceDots(ctx, pts, face, brightness) {
   const alpha = Math.min(1, brightness * 1.6);
   dots.forEach(([u, v]) => {
     const [dx, dy] = bilinear(u, v);
-    const radius = 4;
     ctx.beginPath();
-    ctx.arc(dx, dy, radius, 0, Math.PI * 2);
+    ctx.arc(dx, dy, 4, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(240, 192, 64, ${alpha})`;
     ctx.shadowColor = "rgba(240, 192, 64, 0.8)";
     ctx.shadowBlur = 6;
@@ -555,7 +514,6 @@ function drawRouletteWheel(angle) {
   const count = ROULETTE_NUMBERS.length;
   const segAngle = (2 * Math.PI) / count;
 
-  // Outer ring glow
   const grd = ctx.createRadialGradient(cx, cy, R-10, cx, cy, R+6);
   grd.addColorStop(0, "rgba(155,89,255,0.3)");
   grd.addColorStop(1, "transparent");
@@ -564,7 +522,6 @@ function drawRouletteWheel(angle) {
   ctx.fillStyle = grd;
   ctx.fill();
 
-  // Segments
   for (let i = 0; i < count; i++) {
     const startA = angle + i * segAngle - Math.PI / 2;
     const endA   = startA + segAngle;
@@ -580,7 +537,6 @@ function drawRouletteWheel(angle) {
     ctx.lineWidth = 0.7;
     ctx.stroke();
 
-    // Number text
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(startA + segAngle / 2);
@@ -591,7 +547,6 @@ function drawRouletteWheel(angle) {
     ctx.restore();
   }
 
-  // Center circle
   ctx.beginPath();
   ctx.arc(cx, cy, R * 0.22, 0, 2*Math.PI);
   const cGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.22);
@@ -603,14 +558,12 @@ function drawRouletteWheel(angle) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Logo in center
   ctx.fillStyle = "rgba(240,192,64,0.9)";
   ctx.font = "bold 11px Rajdhani, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("VBL", cx, cy);
 
-  // Pointer (top)
   ctx.beginPath();
   ctx.moveTo(cx, cy - R + 2);
   ctx.lineTo(cx - 7, cy - R - 14);
@@ -658,13 +611,10 @@ async function playRouletteGame() {
   msg.textContent = "🎡 Крутим...";
   msg.className = "slots-result-msg";
 
-  // Start spin animation
-  let spinSpeed = 0.22 + Math.random() * 0.1;
   rouletteSpinning = true;
-
   function spinFrame() {
     if (!rouletteSpinning) return;
-    rouletteAngle += spinSpeed;
+    rouletteAngle += 0.22 + Math.random() * 0.1;
     drawRouletteWheel(rouletteAngle);
     rouletteAnimFrame = requestAnimationFrame(spinFrame);
   }
@@ -684,15 +634,11 @@ async function playRouletteGame() {
     return;
   }
 
-  // Slow down to winning number
   await delay(600);
   const targetIdx = ROULETTE_NUMBERS.indexOf(result.spin_result);
   const segAngle  = (2 * Math.PI) / ROULETTE_NUMBERS.length;
-  // Desired angle so winning segment is at top (pointer at -PI/2)
   let targetAngle = -(targetIdx * segAngle + segAngle / 2) - Math.PI / 2;
-  // Normalize
   while (targetAngle < rouletteAngle) targetAngle += 2 * Math.PI;
-  // Extra spins for drama
   targetAngle += 2 * Math.PI * 2;
 
   const startAngle = rouletteAngle;
@@ -712,7 +658,6 @@ async function playRouletteGame() {
     if (t < 1) {
       rouletteAnimFrame = requestAnimationFrame(decelFrame);
     } else {
-      // Landed!
       const colorLabel = result.result_color === "red" ? "🔴" : result.result_color === "black" ? "⚫" : "🟢";
       document.getElementById("rouletteResult").textContent = result.spin_result;
       document.getElementById("rouletteResult").style.color =
@@ -737,10 +682,6 @@ async function playRouletteGame() {
   requestAnimationFrame(decelFrame);
 }
 
-// ══════════════ UTILS ══════════════
-
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// ══════════════ START ══════════════
 
 init();
