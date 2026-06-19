@@ -7,7 +7,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const BACKEND = ""; // Same origin — requests go to /api/*
+const BACKEND = "https://light-bats-shout.loca.lt";
 const SYMBOLS = ["💎","7️⃣","🍀","⭐","🔔","🍋","🍒"];
 
 let balance      = 0;
