@@ -7,7 +7,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const BACKEND = "https://cuddly-lines-run.loca.lt"; // ← твой localtunnel URL
+const BACKEND = "https://dexcasino-vbl.loca.lt"; // ← твой localtunnel URL
 const SYMBOLS = ["💎","7️⃣","🍀","⭐","🔔","🍋","🍒"];
 
 let balance      = 0;
