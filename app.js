@@ -7,7 +7,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const BACKEND = "https://light-bats-shout.loca.lt";
+const BACKEND = "https://cuddly-lines-run.loca.lt";
 const SYMBOLS = ["💎","7️⃣","🍀","⭐","🔔","🍋","🍒"];
 
 let balance      = 0;
