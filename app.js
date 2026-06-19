@@ -637,9 +637,12 @@ async function playRouletteGame() {
   await delay(600);
   const targetIdx = ROULETTE_NUMBERS.indexOf(result.spin_result);
   const segAngle  = (2 * Math.PI) / ROULETTE_NUMBERS.length;
+  const currentNorm = ((rouletteAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   let targetAngle = -(targetIdx * segAngle + segAngle / 2) - Math.PI / 2;
-  while (targetAngle < rouletteAngle) targetAngle += 2 * Math.PI;
-  targetAngle += 2 * Math.PI * 2;
+  targetAngle = ((targetAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  let delta = (targetAngle - currentNorm + 2 * Math.PI) % (2 * Math.PI);
+  if (delta < 0.1) delta += 2 * Math.PI;
+  targetAngle = rouletteAngle + delta + 2 * Math.PI * 3;
 
   const startAngle = rouletteAngle;
   const duration   = 1400;
