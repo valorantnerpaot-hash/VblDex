@@ -641,7 +641,7 @@ async function playRouletteGame() {
   // Колесо крутится, поэтому нужно повернуть так чтобы центр нужного сектора встал под -PI/2
   const sectorCenter = targetIdx * segAngle; // угол центра сектора от начала
   // Нам нужно: rouletteAngle + X = -PI/2 - sectorCenter (с учётом направления)
-  let stopAngle = -Math.PI / 2 - sectorCenter;
+  let stopAngle = -Math.PI / 2 - sectorCenter + segAngle * 9;
   // Нормализуем чтобы stopAngle был больше текущего угла + минимум 3 оборота
   while (stopAngle < rouletteAngle) stopAngle += 2 * Math.PI;
   const targetAngle = stopAngle + 2 * Math.PI * 4;
