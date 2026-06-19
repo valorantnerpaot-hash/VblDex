@@ -637,12 +637,14 @@ async function playRouletteGame() {
   await delay(600);
   const targetIdx = ROULETTE_NUMBERS.indexOf(result.spin_result);
   const segAngle  = (2 * Math.PI) / ROULETTE_NUMBERS.length;
-  const currentNorm = ((rouletteAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  let targetAngle = -(targetIdx * segAngle + segAngle / 2) - Math.PI / 2;
-  targetAngle = ((targetAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  let delta = (targetAngle - currentNorm + 2 * Math.PI) % (2 * Math.PI);
-  if (delta < 0.1) delta += 2 * Math.PI;
-  targetAngle = rouletteAngle + delta + 2 * Math.PI * 3;
+  // Указатель сверху = -PI/2, сектор попадает под указатель когда его центр = -PI/2
+  // Колесо крутится, поэтому нужно повернуть так чтобы центр нужного сектора встал под -PI/2
+  const sectorCenter = targetIdx * segAngle; // угол центра сектора от начала
+  // Нам нужно: rouletteAngle + X = -PI/2 - sectorCenter (с учётом направления)
+  let stopAngle = -Math.PI / 2 - sectorCenter;
+  // Нормализуем чтобы stopAngle был больше текущего угла + минимум 3 оборота
+  while (stopAngle < rouletteAngle) stopAngle += 2 * Math.PI;
+  const targetAngle = stopAngle + 2 * Math.PI * 4;
 
   const startAngle = rouletteAngle;
   const duration   = 1400;
