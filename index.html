@@ -30,44 +30,74 @@
 <!-- LOBBY -->
 <div class="screen active" id="screen-lobby">
   <div class="lobby-tagline">Сыграй. Выиграй. <span class="text-gold">Стань легендой.</span></div>
+
+  <div class="bonus-banner" id="bonusBanner" onclick="openBonusPanel()">
+    <div class="bonus-banner-icon">🎁</div>
+    <div class="bonus-banner-text">
+      <div class="bonus-banner-title" id="bonusBannerTitle">Загрузка бонуса…</div>
+      <div class="bonus-banner-sub" id="bonusBannerSub"></div>
+    </div>
+    <div class="bonus-banner-arrow">›</div>
+  </div>
+
   <div class="games-grid">
 
     <div class="game-card" onclick="openGame('slots')">
       <div class="game-card-glow purple"></div>
       <div class="game-icon">🎰</div>
+      <div class="game-card-info">
       <div class="game-name">Слоты</div>
       <div class="game-sub">До 50× ставки</div>
+      </div>
       <div class="game-badge hot">🔥 Хит</div>
     </div>
 
     <div class="game-card" onclick="openGame('dice')">
       <div class="game-card-glow emerald"></div>
       <div class="game-icon">🎲</div>
+      <div class="game-card-info">
       <div class="game-name">Кости</div>
       <div class="game-sub">5× за точное попадание</div>
+      </div>
       <div class="game-badge new">✨ Новинка</div>
     </div>
 
     <div class="game-card" onclick="openGame('roulette')">
       <div class="game-card-glow gold"></div>
       <div class="game-icon">🎡</div>
+      <div class="game-card-info">
       <div class="game-name">Рулетка</div>
       <div class="game-sub">До 36× ставки</div>
+      </div>
     </div>
 
     <div class="game-card" onclick="openGame('mines')">
       <div class="game-card-glow purple"></div>
       <div class="game-icon">💣</div>
+      <div class="game-card-info">
       <div class="game-name">Мины</div>
       <div class="game-sub">До x∞ — забери вовремя</div>
+      </div>
       <div class="game-badge new">✨ Новинка</div>
     </div>
 
     <div class="game-card" onclick="openGame('blackjack')">
       <div class="game-card-glow dark"></div>
       <div class="game-icon">🃏</div>
+      <div class="game-card-info">
       <div class="game-name">Блэкджек</div>
       <div class="game-sub">x2 победа, x7 блэкджек</div>
+      </div>
+      <div class="game-badge new">✨ Новинка</div>
+    </div>
+
+    <div class="game-card" onclick="openGame('poker')">
+      <div class="game-card-glow emerald"></div>
+      <div class="game-icon">🂡</div>
+      <div class="game-card-info">
+      <div class="game-name">Видео-покер</div>
+      <div class="game-sub">До 250× — Роял-флеш</div>
+      </div>
       <div class="game-badge new">✨ Новинка</div>
     </div>
 
@@ -327,6 +357,91 @@
     <button class="spin-btn gold" onclick="bjStand()">
       <span class="spin-btn-text">СТЕНД</span>
     </button>
+  </div>
+</div>
+
+<!-- VIDEO POKER GAME -->
+<div class="screen" id="screen-poker">
+  <button class="back-btn" onclick="goLobby()">← Назад</button>
+  <h2 class="screen-title">🂡 Видео-покер</h2>
+  <div class="poker-sub-hint">Jacks or Better — пара валетов и выше уже в плюс</div>
+
+  <div class="poker-table">
+    <div class="poker-hand" id="pokerHand">
+      <div class="poker-card-slot" data-i="0"><div class="poker-card-back">🂠</div></div>
+      <div class="poker-card-slot" data-i="1"><div class="poker-card-back">🂠</div></div>
+      <div class="poker-card-slot" data-i="2"><div class="poker-card-back">🂠</div></div>
+      <div class="poker-card-slot" data-i="3"><div class="poker-card-back">🂠</div></div>
+      <div class="poker-card-slot" data-i="4"><div class="poker-card-back">🂠</div></div>
+    </div>
+    <div class="poker-hold-row" id="pokerHoldRow">
+      <button class="poker-hold-btn" data-i="0" onclick="togglePokerHold(0)">ДЕРЖАТЬ</button>
+      <button class="poker-hold-btn" data-i="1" onclick="togglePokerHold(1)">ДЕРЖАТЬ</button>
+      <button class="poker-hold-btn" data-i="2" onclick="togglePokerHold(2)">ДЕРЖАТЬ</button>
+      <button class="poker-hold-btn" data-i="3" onclick="togglePokerHold(3)">ДЕРЖАТЬ</button>
+      <button class="poker-hold-btn" data-i="4" onclick="togglePokerHold(4)">ДЕРЖАТЬ</button>
+    </div>
+  </div>
+
+  <div class="slots-result-msg" id="pokerResultMsg"></div>
+
+  <div class="bet-section">
+    <div class="bet-label">Ставка (VBL-Coins)</div>
+    <div class="bet-controls">
+      <button class="bet-btn" onclick="changePokerBet(-500)">−500</button>
+      <input class="bet-input" id="pokerBet" type="number" value="100" min="10" max="100000" />
+      <button class="bet-btn" onclick="changePokerBet(500)">+500</button>
+    </div>
+    <div class="bet-presets">
+      <button class="preset-btn" onclick="setPokerBet(100)">100</button>
+      <button class="preset-btn" onclick="setPokerBet(500)">500</button>
+      <button class="preset-btn" onclick="setPokerBet(1000)">1К</button>
+      <button class="preset-btn" onclick="setPokerBet(5000)">5К</button>
+    </div>
+  </div>
+
+  <button class="spin-btn emerald" id="pokerDealBtn" onclick="dealPoker()">
+    <span class="spin-btn-text">РАЗДАТЬ</span>
+    <span class="spin-btn-sub">Получи 5 карт</span>
+  </button>
+
+  <button class="spin-btn gold" id="pokerDrawBtn" style="display:none;" onclick="drawPoker()">
+    <span class="spin-btn-text">ЗАМЕНИТЬ</span>
+    <span class="spin-btn-sub">Замени не отмеченные карты</span>
+  </button>
+
+  <div class="paytable">
+    <div class="paytable-title">Таблица выплат</div>
+    <div class="paytable-row"><span>Роял-флеш</span><span class="pt-mult">×250</span></div>
+    <div class="paytable-row"><span>Стрит-флеш</span><span class="pt-mult">×50</span></div>
+    <div class="paytable-row"><span>Каре</span><span class="pt-mult">×25</span></div>
+    <div class="paytable-row"><span>Фулл-хаус</span><span class="pt-mult">×9</span></div>
+    <div class="paytable-row"><span>Флеш</span><span class="pt-mult">×6</span></div>
+    <div class="paytable-row"><span>Стрит</span><span class="pt-mult">×4</span></div>
+    <div class="paytable-row"><span>Сет</span><span class="pt-mult">×3</span></div>
+    <div class="paytable-row"><span>Две пары</span><span class="pt-mult">×2</span></div>
+    <div class="paytable-row"><span>Пара В-В и выше</span><span class="pt-mult">×1</span></div>
+  </div>
+</div>
+
+<!-- BONUS MODAL -->
+<div class="bonus-modal" id="bonusModal">
+  <div class="bonus-modal-card">
+    <button class="bonus-modal-close" onclick="closeBonusPanel()">✕</button>
+    <div class="bonus-modal-icon">🎁</div>
+    <div class="bonus-modal-title">Ежедневный бонус</div>
+    <div class="bonus-streak-row" id="bonusStreakRow"></div>
+    <div class="bonus-modal-amount" id="bonusModalAmount">—</div>
+    <button class="spin-btn" id="bonusClaimBtn" onclick="claimDailyBonus()">
+      <span class="spin-btn-text">ЗАБРАТЬ БОНУС</span>
+    </button>
+    <div class="bonus-modal-divider"></div>
+    <div class="topup-block" id="topupBlock" style="display:none;">
+      <div class="topup-text">Баланс мал для игры? Возьми небольшую подзарядку.</div>
+      <button class="spin-btn emerald" id="topupClaimBtn" onclick="claimTopup()">
+        <span class="spin-btn-text">ПОДЗАРЯДКА +<span id="topupAmountLabel"></span></span>
+      </button>
+    </div>
   </div>
 </div>
 
