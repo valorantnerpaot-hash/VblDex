@@ -815,3 +815,118 @@ html, body {
   border-color: var(--gold);
   color: var(--gold);
 }
+
+/* ══════════════ CRASH (РАКЕТКА) ══════════════ */
+
+.crash-canvas-wrap {
+  position: relative;
+  width: 100%; max-width: 420px;
+  height: 280px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 100%, #150e2e 0%, #0a0a12 70%);
+  border: 1px solid var(--border);
+  box-shadow: 0 0 30px rgba(155,89,255,0.15), inset 0 0 40px rgba(0,0,0,0.5);
+  margin-bottom: 16px;
+}
+#crashCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.crash-mult-display {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  font-size: 52px; color: #fff;
+  text-shadow: 0 0 24px rgba(155,89,255,0.7), 0 0 4px rgba(0,0,0,0.8);
+  pointer-events: none; z-index: 3;
+  transition: color 0.2s ease;
+  display: flex; align-items: baseline; gap: 2px;
+}
+.crash-mult-display.flying  { color: var(--emerald); text-shadow: 0 0 26px rgba(46,204,113,0.7); }
+.crash-mult-display.crashed { color: var(--red); text-shadow: 0 0 26px rgba(231,76,60,0.8); }
+.crash-mult-x { font-size: 26px; opacity: 0.8; }
+
+.crash-phase-banner {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 14px;
+  letter-spacing: 1px; padding: 5px 16px; border-radius: 20px;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(8px);
+  color: var(--muted); border: 1px solid var(--border);
+  z-index: 4; pointer-events: none; white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.crash-phase-banner.waiting { color: var(--gold); border-color: rgba(240,192,64,0.4); }
+.crash-phase-banner.flying  { color: var(--emerald); border-color: rgba(46,204,113,0.4); }
+.crash-phase-banner.crashed { color: var(--red); border-color: rgba(231,76,60,0.5); }
+
+@keyframes crash-shake {
+  0%, 100% { transform: translate(0,0); }
+  20% { transform: translate(-6px, 3px); }
+  40% { transform: translate(5px, -4px); }
+  60% { transform: translate(-4px, -2px); }
+  80% { transform: translate(3px, 4px); }
+}
+.crash-canvas-wrap.shake { animation: crash-shake 0.3s ease; }
+
+.crash-controls {
+  width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; gap: 12px;
+  margin-bottom: 16px;
+}
+.crash-bet-section { margin-bottom: 0; max-width: none; }
+
+.crash-action-btn {
+  max-width: none; margin-bottom: 0;
+  background: linear-gradient(135deg, var(--emerald-d), var(--emerald));
+  box-shadow: 0 4px 24px rgba(46,204,113,0.4);
+}
+.crash-action-btn.mode-cashout {
+  background: linear-gradient(135deg, var(--gold-d), var(--gold));
+  box-shadow: 0 4px 28px rgba(240,192,64,0.55);
+}
+.crash-action-btn.mode-wait {
+  background: linear-gradient(135deg, #3a3a52, #2a2a3e);
+  box-shadow: none;
+}
+.crash-action-btn.mode-placed {
+  background: linear-gradient(135deg, var(--violet-d), var(--violet));
+}
+
+.crash-board {
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 14px 6px;
+}
+.crash-board-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); margin-bottom: 10px;
+}
+.crash-board-head, .crash-board-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr 1.1fr;
+  gap: 6px; align-items: center;
+}
+.crash-board-head {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--muted); padding-bottom: 8px;
+  border-bottom: 1px solid rgba(155,89,255,0.12);
+  margin-bottom: 4px;
+}
+.crash-board-rows { max-height: 220px; overflow-y: auto; }
+.crash-board-empty {
+  text-align: center; color: var(--muted); font-size: 13px; padding: 16px 0;
+}
+.crash-board-row {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(155,89,255,0.06);
+  font-size: 13px;
+  transition: background 0.3s ease;
+}
+.crash-board-row:last-child { border-bottom: none; }
+.crash-board-row.me { background: rgba(155,89,255,0.08); border-radius: 8px; }
+.crash-board-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crash-board-bet  { color: var(--gold); font-family: 'Rajdhani', sans-serif; font-weight: 700; }
+.crash-board-status { font-weight: 700; font-size: 12px; white-space: nowrap; }
+.crash-board-status.playing { color: var(--violet); }
+.crash-board-status.won     { color: var(--emerald); }
+.crash-board-status.lost    { color: var(--red); }
