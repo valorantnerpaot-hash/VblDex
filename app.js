@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════
    VBL CASINO — app.js
-   Slots + Dice (3D Canvas) + Roulette
+   Slots + Dice (3D Canvas) + Roulette + Mines
    ══════════════════════════════════════════ */
 
 const tg = window.Telegram.WebApp;
@@ -116,6 +116,7 @@ function openGame(name) {
   if (name === "slots")    initSlots();
   if (name === "dice")     initDice();
   if (name === "roulette") initRoulette();
+  if (name === "mines")    initMines();
 }
 
 function goLobby() {
@@ -637,12 +638,8 @@ async function playRouletteGame() {
   await delay(600);
   const targetIdx = ROULETTE_NUMBERS.indexOf(result.spin_result);
   const segAngle  = (2 * Math.PI) / ROULETTE_NUMBERS.length;
-  // Указатель сверху = -PI/2, сектор попадает под указатель когда его центр = -PI/2
-  // Колесо крутится, поэтому нужно повернуть так чтобы центр нужного сектора встал под -PI/2
-  const sectorCenter = targetIdx * segAngle; // угол центра сектора от начала
-  // Нам нужно: rouletteAngle + X = -PI/2 - sectorCenter (с учётом направления)
+  const sectorCenter = targetIdx * segAngle;
   let stopAngle = -Math.PI / 2 - sectorCenter + segAngle * 9;
-  // Нормализуем чтобы stopAngle был больше текущего угла + минимум 3 оборота
   while (stopAngle < rouletteAngle) stopAngle += 2 * Math.PI;
   const targetAngle = stopAngle + 2 * Math.PI * 4;
 
@@ -688,5 +685,205 @@ async function playRouletteGame() {
 }
 
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ══════════════════════════════════════════
+//  MINES
+// ══════════════════════════════════════════
+
+let minesActive       = false;
+let minesGridLocked   = false;
+let minesOpened        = new Set();
+let minesCount          = 3;
+let minesCurrentMult   = 1.0;
+let minesNextMult      = null;
+
+async function initMines() {
+  minesActive     = false;
+  minesGridLocked = false;
+  minesOpened     = new Set();
+  minesCurrentMult = 1.0;
+  minesNextMult    = null;
+
+  const grid = document.getElementById("minesGrid");
+  grid.innerHTML = "";
+  for (let i = 0; i < 25; i++) {
+    const cell = document.createElement("div");
+    cell.className = "mines-cell";
+    cell.dataset.index = i;
+    cell.onclick = () => revealMineCell(i, cell);
+    grid.appendChild(cell);
+  }
+
+  document.getElementById("minesResultMsg").textContent = "";
+  document.getElementById("minesResultMsg").className = "slots-result-msg";
+  document.getElementById("minesStartBtn").style.display = "block";
+  document.getElementById("minesCashoutBtn").style.display = "none";
+  document.getElementById("minesCashoutBtn").disabled = true;
+  document.getElementById("minesMultDisplay").textContent = "x1.00";
+  document.getElementById("minesCountInput").disabled = false;
+  document.getElementById("minesBet").disabled = false;
+
+  // Проверяем — вдруг есть незавершённая игра (например, после рестарта бэка/перезахода)
+  try {
+    const state = await apiFetch("/api/play/mines/state", "GET");
+    if (state.active) {
+      minesActive = true;
+      minesCount  = state.mines_count;
+      minesOpened = new Set(state.opened);
+      minesCurrentMult = state.current_multiplier;
+      minesNextMult    = state.next_multiplier;
+
+      document.getElementById("minesBet").value = state.bet;
+      document.getElementById("minesCountInput").value = state.mines_count;
+      document.getElementById("minesCountInput").disabled = true;
+      document.getElementById("minesBet").disabled = true;
+      document.getElementById("minesStartBtn").style.display = "none";
+      document.getElementById("minesCashoutBtn").style.display = "block";
+      document.getElementById("minesCashoutBtn").disabled = false;
+      document.getElementById("minesMultDisplay").textContent = `x${minesCurrentMult.toFixed(2)}`;
+
+      minesOpened.forEach(i => {
+        const c = document.querySelector(`.mines-cell[data-index="${i}"]`);
+        if (c) { c.classList.add("mine-safe"); c.textContent = "💎"; }
+      });
+
+      const msg = document.getElementById("minesResultMsg");
+      msg.textContent = "♻️ Незавершённая игра восстановлена.";
+      msg.className = "slots-result-msg";
+    }
+  } catch(e) {
+    console.error("[VBL] mines state check failed:", e.message);
+  }
+}
+
+function changeMinesBet(delta) {
+  const inp = document.getElementById("minesBet");
+  inp.value = Math.max(10, Math.min(100000, Number(inp.value) + delta));
+}
+function setMinesBet(val) { document.getElementById("minesBet").value = val; }
+
+function changeMinesCount(delta) {
+  const inp = document.getElementById("minesCountInput");
+  inp.value = Math.max(1, Math.min(24, Number(inp.value) + delta));
+}
+
+async function startMinesGame() {
+  if (minesActive) return;
+  const bet = Number(document.getElementById("minesBet").value);
+  const count = Number(document.getElementById("minesCountInput").value);
+  if (!bet || bet < 10) { showToast("Минимальная ставка: 10 VBL", "info"); return; }
+  if (bet > balance)    { showToast("Недостаточно VBL-Coins!", "lose"); return; }
+  if (!(count >= 1 && count <= 24)) { showToast("Мин: от 1 до 24", "info"); return; }
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/mines/start", "POST", { bet, mines_count: count });
+  } catch(e) {
+    showToast(e.message, "lose");
+    return;
+  }
+
+  minesActive = true;
+  minesCount  = count;
+  minesOpened = new Set();
+  minesNextMult = result.next_multiplier;
+  updateBalanceUI(result.new_balance, null);
+
+  document.getElementById("minesStartBtn").style.display = "none";
+  document.getElementById("minesCashoutBtn").style.display = "block";
+  document.getElementById("minesCashoutBtn").disabled = false;
+  document.getElementById("minesCountInput").disabled = true;
+  document.getElementById("minesBet").disabled = true;
+  document.getElementById("minesMultDisplay").textContent = "x1.00";
+
+  const msg = document.getElementById("minesResultMsg");
+  msg.textContent = `💣 ${count} мин на поле. Жми клетки!`;
+  msg.className = "slots-result-msg";
+}
+
+async function revealMineCell(index, cellEl) {
+  if (!minesActive || minesGridLocked) return;
+  if (minesOpened.has(index)) return;
+
+  minesGridLocked = true;
+  let result;
+  try {
+    result = await apiFetch("/api/play/mines/reveal", "POST", { cell: index });
+  } catch(e) {
+    showToast(e.message, "lose");
+    minesGridLocked = false;
+    return;
+  }
+
+  if (result.status === "boom") {
+    cellEl.classList.add("mine-hit");
+    cellEl.textContent = "💥";
+    result.mines.forEach(i => {
+      const c = document.querySelector(`.mines-cell[data-index="${i}"]`);
+      if (c && i !== index) { c.classList.add("mine-revealed"); c.textContent = "💣"; }
+    });
+    document.querySelectorAll(".mines-cell").forEach(c => c.onclick = null);
+
+    const msg = document.getElementById("minesResultMsg");
+    msg.textContent = "💥 Бум! Ты подорвался.";
+    msg.className = "slots-result-msg lose-msg";
+    showToast("💥 Мина! Ставка потеряна.", "lose");
+
+    minesActive = false;
+    document.getElementById("minesCashoutBtn").style.display = "none";
+    document.getElementById("minesStartBtn").style.display = "block";
+    document.getElementById("minesCountInput").disabled = false;
+    document.getElementById("minesBet").disabled = false;
+    minesGridLocked = false;
+    return;
+  }
+
+  minesOpened.add(index);
+  cellEl.classList.add("mine-safe");
+  cellEl.textContent = "💎";
+  minesCurrentMult = result.current_multiplier;
+  minesNextMult    = result.next_multiplier;
+
+  document.getElementById("minesMultDisplay").textContent = `x${minesCurrentMult.toFixed(2)}`;
+
+  const msg = document.getElementById("minesResultMsg");
+  if (result.all_safe_opened) {
+    msg.textContent = "🏆 Все безопасные клетки открыты! Забирай выигрыш.";
+    msg.className = "slots-result-msg win-msg";
+  } else {
+    msg.textContent = `✨ Безопасно! Следующая: x${minesNextMult.toFixed(2)}`;
+    msg.className = "slots-result-msg";
+  }
+
+  minesGridLocked = false;
+}
+
+async function cashoutMines() {
+  if (!minesActive) return;
+  document.getElementById("minesCashoutBtn").disabled = true;
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/mines/cashout", "POST", {});
+  } catch(e) {
+    showToast(e.message, "lose");
+    document.getElementById("minesCashoutBtn").disabled = false;
+    return;
+  }
+
+  minesActive = false;
+  updateBalanceUI(result.new_balance, null);
+  document.querySelectorAll(".mines-cell").forEach(c => c.onclick = null);
+
+  const msg = document.getElementById("minesResultMsg");
+  msg.textContent = `💰 Забрал x${result.multiplier.toFixed(2)}! +${fmtNum(result.win)} VBL`;
+  msg.className = "slots-result-msg win-msg";
+  showToast(`💰 +${fmtNum(result.win)} VBL (x${result.multiplier.toFixed(2)})`, "win");
+
+  document.getElementById("minesCashoutBtn").style.display = "none";
+  document.getElementById("minesStartBtn").style.display = "block";
+  document.getElementById("minesCountInput").disabled = false;
+  document.getElementById("minesBet").disabled = false;
+}
 
 init();
