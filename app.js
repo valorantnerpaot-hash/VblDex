@@ -1414,9 +1414,6 @@ function updateCrashUI(state) {
   const actionText = document.getElementById("crashActionText");
   const actionSub  = document.getElementById("crashActionSub");
   const banner     = document.getElementById("crashPhaseBanner");
-  const multEl     = document.getElementById("crashMultDisplay");
-
-  multEl.classList.remove("flying", "crashed");
 
   if (state.phase === "waiting") {
     banner.textContent = `⏳ Ставки открыты: ${Math.ceil(state.waiting_remaining || 0)}с`;
@@ -1436,7 +1433,6 @@ function updateCrashUI(state) {
   } else if (state.phase === "flying") {
     banner.textContent = "🚀 Полёт!";
     banner.className = "crash-phase-banner flying";
-    multEl.classList.add("flying");
 
     if (crashMyBetThisRound && !crashCashedOutThisRound) {
       const bet = (crashState.my_bet && crashState.my_bet.bet) || 0;
@@ -1460,7 +1456,6 @@ function updateCrashUI(state) {
   } else if (state.phase === "crashed") {
     banner.textContent = `💥 Улетела на x${(state.crash_point || 1).toFixed(2)}`;
     banner.className = "crash-phase-banner crashed";
-    multEl.classList.add("crashed");
 
     actionBtn.className = "spin-btn crash-action-btn mode-wait";
     actionBtn.disabled = true;
@@ -1469,6 +1464,27 @@ function updateCrashUI(state) {
   }
 
   renderCrashBoard(state);
+  renderCrashHistory(state);
+}
+
+// ── Цветовые пороги множителя: <5 синий, 5–30 фиолетовый, 30–100 золотой, 100+ ядерно-красный ──
+function crashTierClass(mult) {
+  if (mult >= 100) return "tier-red";
+  if (mult >= 30)  return "tier-gold";
+  if (mult >= 5)   return "tier-violet";
+  return "tier-blue";
+}
+
+function renderCrashHistory(state) {
+  const box = document.getElementById("crashHistory");
+  const hist = state.history || [];
+  if (hist.length === 0) {
+    box.innerHTML = '<div class="crash-history-empty">История раундов появится здесь…</div>';
+    return;
+  }
+  box.innerHTML = hist.map(v =>
+    `<div class="crash-history-pill ${crashTierClass(v)}">x${v.toFixed(2)}</div>`
+  ).join("");
 }
 
 function renderCrashBoard(state) {
@@ -1565,11 +1581,16 @@ function crashRenderLoop() {
   const phase = crashState ? crashState.phase : "waiting";
   const mult = crashLiveMultiplier();
 
-  // обновляем текст множителя
+  // обновляем текст множителя + цвет по порогу
   const multEl = document.getElementById("crashMultDisplay");
   if (multEl) {
     const shown = phase === "waiting" ? "1.00" : mult.toFixed(2);
     multEl.firstChild.nodeValue = shown;
+    const tier = crashTierClass(phase === "waiting" ? 1 : mult);
+    if (!multEl.classList.contains(tier)) {
+      multEl.classList.remove("tier-blue", "tier-violet", "tier-gold", "tier-red");
+      multEl.classList.add(tier);
+    }
   }
 
   // позиция ракеты — нелинейная кривая (ускоряется к концу)
