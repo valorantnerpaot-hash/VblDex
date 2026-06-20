@@ -252,34 +252,33 @@ function triggerWinEffect() {
 }
 
 // ══════════════════════════════════════════
-//  DICE (3D Canvas)
+//  DICE (CSS 3D)
 // ══════════════════════════════════════════
 
-let diceAnimFrame = null;
-let diceAngle = { x: 20, y: 30 };
-let diceTarget = { x: 20, y: 30 };
-let diceSpinSpeed = { x: 0, y: 0 };
-let diceFace = 1;
-let diceSettled = true;
-
-const DICE_DOTS = {
-  1: [[0.5,0.5]],
-  2: [[0.25,0.25],[0.75,0.75]],
-  3: [[0.25,0.25],[0.5,0.5],[0.75,0.75]],
-  4: [[0.25,0.25],[0.75,0.25],[0.25,0.75],[0.75,0.75]],
-  5: [[0.25,0.25],[0.75,0.25],[0.5,0.5],[0.25,0.75],[0.75,0.75]],
-  6: [[0.25,0.2],[0.75,0.2],[0.25,0.5],[0.75,0.5],[0.25,0.8],[0.75,0.8]],
+const DICE_ROTATIONS = {
+  1: { x: 0,   y: 0   },
+  2: { x: -90, y: 0   },
+  3: { x: 0,   y: 90  },
+  4: { x: 0,   y: -90 },
+  5: { x: 90,  y: 0   },
+  6: { x: 0,   y: 180 },
 };
+
+let diceCurrentX = 0;
+let diceCurrentY = 0;
 
 function initDice() {
   diceChosen = null;
-  diceFace = 1;
-  diceSettled = true;
+  diceCurrentX = 0;
+  diceCurrentY = 0;
   document.querySelectorAll(".dice-num-btn").forEach(b => b.classList.remove("selected"));
   document.getElementById("diceResultMsg").textContent = "";
   document.getElementById("diceResultMsg").className = "slots-result-msg";
   document.getElementById("diceResultDisplay").textContent = "?";
-  drawDice3D(1);
+
+  const cube = document.getElementById("diceCube");
+  cube.style.transition = "none";
+  cube.style.transform = "rotateX(0deg) rotateY(0deg)";
 }
 
 function chooseDiceNum(btn, num) {
@@ -310,168 +309,52 @@ async function playDiceGame() {
   msg.className = "slots-result-msg";
   document.getElementById("diceResultDisplay").textContent = "";
 
-  diceSettled = false;
-  diceSpinSpeed = { x: 8 + Math.random() * 6, y: 12 + Math.random() * 8 };
-  animateDiceSpin();
+  // Хаотичное вращение пока ждём сервер
+  const cube = document.getElementById("diceCube");
+  const spinX = diceCurrentX + 360 * (3 + Math.floor(Math.random() * 3));
+  const spinY = diceCurrentY + 360 * (3 + Math.floor(Math.random() * 3));
+  cube.style.transition = "transform 0.8s ease-in";
+  cube.style.transform  = `rotateX(${spinX}deg) rotateY(${spinY}deg)`;
 
   let result;
   try {
     result = await apiFetch("/api/play/dice", "POST", { bet, chosen: diceChosen });
   } catch(e) {
     showToast(e.message, "lose");
-    stopDiceAnim();
     isSpinning = false; btn.disabled = false;
+    msg.textContent = "";
     return;
   }
 
-  await delay(800);
-  slowDownDice(result.result, () => {
-    document.getElementById("diceResultDisplay").textContent = result.result;
-    updateBalanceUI(result.new_balance, null);
+  // Финальный угол: базовый + много оборотов для драмы
+  const base   = DICE_ROTATIONS[result.result];
+  const extraX = 360 * (4 + Math.floor(Math.random() * 3));
+  const extraY = 360 * (4 + Math.floor(Math.random() * 3));
+  const finalX = base.x + extraX;
+  const finalY = base.y + extraY;
 
-    if (result.won) {
-      msg.textContent = `🎉 Угадал! +${fmtNum(result.win)} VBL`;
-      msg.className = "slots-result-msg win-msg";
-      showToast(`🎉 Угадал ${result.result}! +${fmtNum(result.win)} VBL`, "win");
-    } else {
-      msg.textContent = `😔 Выпало ${result.result}. −${fmtNum(bet)} VBL`;
-      msg.className = "slots-result-msg lose-msg";
-      showToast(`Выпало ${result.result}, не ${diceChosen}. −${fmtNum(bet)} VBL`, "lose");
-    }
-    isSpinning = false;
-    btn.disabled = false;
-  });
-}
+  cube.style.transition = "transform 2s cubic-bezier(0.25, 0.1, 0.25, 1)";
+  cube.style.transform  = `rotateX(${finalX}deg) rotateY(${finalY}deg)`;
+  diceCurrentX = finalX;
+  diceCurrentY = finalY;
 
-function animateDiceSpin() {
-  if (diceAnimFrame) cancelAnimationFrame(diceAnimFrame);
-  function frame() {
-    if (diceSettled) return;
-    diceAngle.x += diceSpinSpeed.x;
-    diceAngle.y += diceSpinSpeed.y;
-    drawDice3D(diceFace, diceAngle.x, diceAngle.y);
-    diceAnimFrame = requestAnimationFrame(frame);
-  }
-  frame();
-}
+  await delay(2100);
 
-function slowDownDice(targetFace, callback) {
-  let frames = 0;
-  const totalFrames = 40;
-  const startSpeedX = diceSpinSpeed.x;
-  const startSpeedY = diceSpinSpeed.y;
+  document.getElementById("diceResultDisplay").textContent = result.result;
+  updateBalanceUI(result.new_balance, null);
 
-  function decel() {
-    frames++;
-    const t = frames / totalFrames;
-    diceSpinSpeed.x = startSpeedX * (1 - t);
-    diceSpinSpeed.y = startSpeedY * (1 - t);
-    diceAngle.x += diceSpinSpeed.x;
-    diceAngle.y += diceSpinSpeed.y;
-    drawDice3D(targetFace, diceAngle.x, diceAngle.y);
-    if (frames < totalFrames) {
-      diceAnimFrame = requestAnimationFrame(decel);
-    } else {
-      diceSettled = true;
-      diceFace = targetFace;
-      diceAngle = { x: 20, y: 30 };
-      drawDice3D(targetFace, 20, 30);
-      if (callback) callback();
-    }
-  }
-  if (diceAnimFrame) cancelAnimationFrame(diceAnimFrame);
-  decel();
-}
-
-function stopDiceAnim() {
-  diceSettled = true;
-  if (diceAnimFrame) cancelAnimationFrame(diceAnimFrame);
-}
-
-function drawDice3D(face, rotX = 20, rotY = 30) {
-  const canvas = document.getElementById("diceCanvas");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  const cx = W / 2, cy = H / 2;
-  const size = 64;
-  const rx = (rotX * Math.PI) / 180;
-  const ry = (rotY * Math.PI) / 180;
-
-  function project([x, y, z]) {
-    const x1 = x * Math.cos(ry) + z * Math.sin(ry);
-    const z1 = -x * Math.sin(ry) + z * Math.cos(ry);
-    const y2 = y * Math.cos(rx) - z1 * Math.sin(rx);
-    const z2 = y * Math.sin(rx) + z1 * Math.cos(rx);
-    const fov = 5;
-    const scale = fov / (fov + z2 * 0.8);
-    return [cx + x1 * size * scale, cy + y2 * size * scale, z2];
+  if (result.won) {
+    msg.textContent = `🎉 Угадал! +${fmtNum(result.win)} VBL`;
+    msg.className = "slots-result-msg win-msg";
+    showToast(`🎉 Угадал ${result.result}! +${fmtNum(result.win)} VBL`, "win");
+  } else {
+    msg.textContent = `😔 Выпало ${result.result}. −${fmtNum(bet)} VBL`;
+    msg.className = "slots-result-msg lose-msg";
+    showToast(`Выпало ${result.result}, не ${diceChosen}. −${fmtNum(bet)} VBL`, "lose");
   }
 
-  const v = [
-    [-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
-    [-1,-1, 1],[1,-1, 1],[1,1, 1],[-1,1, 1],
-  ].map(project);
-
-  const faces = [
-    { verts:[0,1,2,3], normal:[0,0,-1], face:1 },
-    { verts:[4,5,6,7], normal:[0,0,1],  face:6 },
-    { verts:[0,1,5,4], normal:[0,-1,0], face:2 },
-    { verts:[2,3,7,6], normal:[0,1,0],  face:5 },
-    { verts:[0,3,7,4], normal:[-1,0,0], face:3 },
-    { verts:[1,2,6,5], normal:[1,0,0],  face:4 },
-  ];
-
-  faces.forEach(f => { f.avgZ = f.verts.reduce((s,i) => s + v[i][2], 0) / 4; });
-  faces.sort((a, b) => a.avgZ - b.avgZ);
-
-  for (const f of faces) {
-    const pts = f.verts.map(i => v[i]);
-    const lightDir = [0.5, -0.8, 0.3];
-    const n = f.normal;
-    const dot = Math.max(0, n[0]*lightDir[0] + n[1]*lightDir[1] + n[2]*lightDir[2]);
-    const brightness = 0.35 + dot * 0.65;
-
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.closePath();
-
-    const r = Math.round(30 * brightness), g = Math.round(30 * brightness), b = Math.round(60 * brightness + 10);
-    ctx.fillStyle = `rgb(${r},${g},${b})`;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(155, 89, 255, ${0.4 * brightness})`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    drawDiceDots(ctx, pts, f.face === face ? face : f.face, brightness);
-  }
-}
-
-function drawDiceDots(ctx, pts, face, brightness) {
-  const dots = DICE_DOTS[face] || [];
-  if (!dots.length) return;
-
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function bilinear(u, v) {
-    const top    = [lerp(pts[0][0], pts[1][0], u), lerp(pts[0][1], pts[1][1], u)];
-    const bottom = [lerp(pts[3][0], pts[2][0], u), lerp(pts[3][1], pts[2][1], u)];
-    return [lerp(top[0], bottom[0], v), lerp(top[1], bottom[1], v)];
-  }
-
-  const alpha = Math.min(1, brightness * 1.6);
-  dots.forEach(([u, v]) => {
-    const [dx, dy] = bilinear(u, v);
-    ctx.beginPath();
-    ctx.arc(dx, dy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(240, 192, 64, ${alpha})`;
-    ctx.shadowColor = "rgba(240, 192, 64, 0.8)";
-    ctx.shadowBlur = 6;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  });
+  isSpinning = false;
+  btn.disabled = false;
 }
 
 // ══════════════════════════════════════════
