@@ -57,6 +57,7 @@ async function init() {
   }
 
   await fetchBalance();
+  await fetchBonusStatus();
 }
 
 async function fetchBalance() {
@@ -118,6 +119,7 @@ function openGame(name) {
   if (name === "roulette") initRoulette();
   if (name === "mines")    initMines();
   if (name === "blackjack") initBlackjack();
+  if (name === "poker")    initPoker();
 }
 
 function goLobby() {
@@ -786,6 +788,298 @@ async function cashoutMines() {
 }
 
 init();
+
+// ══════════════════════════════════════════
+//  DAILY BONUS + TOPUP
+// ══════════════════════════════════════════
+
+let bonusStatusCache = null;
+let topupStatusCache = null;
+let bonusCountdownTimer = null;
+
+function fmtClock(seconds) {
+  seconds = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}ч ${m}м`;
+}
+
+async function fetchBonusStatus() {
+  try {
+    const res = await apiFetch("/api/bonus/status", "GET");
+    bonusStatusCache = res.bonus;
+    topupStatusCache = res.topup;
+    renderBonusBanner();
+  } catch (e) {
+    console.error("[VBL] bonus status failed:", e.message);
+  }
+}
+
+function renderBonusBanner() {
+  const titleEl = document.getElementById("bonusBannerTitle");
+  const subEl   = document.getElementById("bonusBannerSub");
+  if (!titleEl || !bonusStatusCache) return;
+
+  clearInterval(bonusCountdownTimer);
+
+  if (bonusStatusCache.ready) {
+    titleEl.textContent = `🎁 Бонус готов: +${fmtNum(bonusStatusCache.next_amount)} VBL`;
+    subEl.textContent = `🔥 Серия: день ${bonusStatusCache.next_streak_day}`;
+  } else {
+    let remaining = bonusStatusCache.remaining_seconds || 0;
+    titleEl.textContent = "🎁 Следующий бонус через";
+    subEl.textContent = fmtClock(remaining);
+    bonusCountdownTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(bonusCountdownTimer);
+        fetchBonusStatus();
+        return;
+      }
+      subEl.textContent = fmtClock(remaining);
+    }, 1000);
+  }
+
+  // Subtle hint on the banner itself if a top-up is currently available
+  const banner = document.getElementById("bonusBanner");
+  if (topupStatusCache && topupStatusCache.eligible) {
+    banner.classList.add("has-topup");
+  } else {
+    banner.classList.remove("has-topup");
+  }
+}
+
+function openBonusPanel() {
+  document.getElementById("bonusModal").classList.add("show");
+  renderBonusModal();
+}
+
+function closeBonusPanel() {
+  document.getElementById("bonusModal").classList.remove("show");
+}
+
+function renderBonusModal() {
+  const amountEl = document.getElementById("bonusModalAmount");
+  const streakEl = document.getElementById("bonusStreakRow");
+  const claimBtn = document.getElementById("bonusClaimBtn");
+
+  if (bonusStatusCache) {
+    if (bonusStatusCache.ready) {
+      amountEl.textContent = `+${fmtNum(bonusStatusCache.next_amount)} VBL`;
+      claimBtn.disabled = false;
+      claimBtn.querySelector(".spin-btn-text").textContent = "ЗАБРАТЬ БОНУС";
+    } else {
+      amountEl.textContent = `Доступен через ${fmtClock(bonusStatusCache.remaining_seconds || 0)}`;
+      claimBtn.disabled = true;
+      claimBtn.querySelector(".spin-btn-text").textContent = "ПОКА НЕДОСТУПНО";
+    }
+    const dayLabels = [1,2,3,4,5,6,7].map(d => {
+      const active = d <= bonusStatusCache.next_streak_day;
+      return `<span class="bonus-day ${active ? "active" : ""}">${d}</span>`;
+    }).join("");
+    streakEl.innerHTML = dayLabels;
+  }
+
+  const topupBlock = document.getElementById("topupBlock");
+  const topupBtn = document.getElementById("topupClaimBtn");
+  document.getElementById("topupAmountLabel").textContent = topupStatusCache ? topupStatusCache.amount : "";
+  if (topupStatusCache && topupStatusCache.eligible) {
+    topupBlock.style.display = "block";
+    topupBtn.disabled = false;
+  } else if (topupStatusCache && topupStatusCache.amount && (balance < topupStatusCache.threshold)) {
+    topupBlock.style.display = "block";
+    topupBtn.disabled = true;
+  } else {
+    topupBlock.style.display = "none";
+  }
+}
+
+async function claimDailyBonus() {
+  const btn = document.getElementById("bonusClaimBtn");
+  btn.disabled = true;
+  try {
+    const result = await apiFetch("/api/bonus/claim", "POST", {});
+    updateBalanceUI(result.new_balance, null);
+    showToast(`🎁 +${fmtNum(result.amount)} VBL — серия день ${result.streak}!`, "win");
+    await fetchBonusStatus();
+    renderBonusModal();
+  } catch (e) {
+    showToast(e.message, "lose");
+    btn.disabled = false;
+  }
+}
+
+async function claimTopup() {
+  const btn = document.getElementById("topupClaimBtn");
+  btn.disabled = true;
+  try {
+    const result = await apiFetch("/api/topup/claim", "POST", {});
+    updateBalanceUI(result.new_balance, null);
+    showToast(`💧 Подзарядка: +${fmtNum(result.amount)} VBL`, "win");
+    await fetchBonusStatus();
+    renderBonusModal();
+  } catch (e) {
+    showToast(e.message, "lose");
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════
+//  VIDEO POKER
+// ══════════════════════════════════════════
+
+let pokerActive = false;
+let pokerLocked = false;
+let pokerHolds  = [false, false, false, false, false];
+
+const POKER_SUIT_SYMBOL = { "♠": "♠", "♥": "♥", "♦": "♦", "♣": "♣" };
+const POKER_HAND_LABELS = {
+  royal_flush: "👑 РОЯЛ-ФЛЕШ!",
+  straight_flush: "Стрит-флеш!",
+  four_kind: "Каре!",
+  full_house: "Фулл-хаус!",
+  flush: "Флеш!",
+  straight: "Стрит!",
+  three_kind: "Сет!",
+  two_pair: "Две пары!",
+  jacks_or_better: "Пара В-В и выше!",
+  nothing: "Мимо",
+};
+
+function pokerCardEl(card) {
+  const el = document.createElement("div");
+  const [rank, suit] = card;
+  const isRed = (suit === "♥" || suit === "♦");
+  el.className = "poker-card" + (isRed ? " poker-card-red" : "");
+  el.innerHTML = `
+    <span class="poker-card-corner">${rank}<br>${suit}</span>
+    <span class="poker-card-suit-big">${suit}</span>
+  `;
+  return el;
+}
+
+function initPoker() {
+  pokerActive = false;
+  pokerLocked = false;
+  pokerHolds = [false, false, false, false, false];
+  document.querySelectorAll(".poker-card-slot").forEach(slot => {
+    slot.innerHTML = `<div class="poker-card-back">🂠</div>`;
+  });
+  document.querySelectorAll(".poker-hold-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("pokerHoldRow").style.display = "none";
+  document.getElementById("pokerResultMsg").textContent = "";
+  document.getElementById("pokerResultMsg").className = "slots-result-msg";
+  document.getElementById("pokerDealBtn").style.display = "block";
+  document.getElementById("pokerDrawBtn").style.display = "none";
+  document.getElementById("pokerBet").disabled = false;
+
+  apiFetch("/api/play/poker/state", "GET").then(state => {
+    if (state.active) {
+      pokerActive = true;
+      document.getElementById("pokerBet").value = state.bet;
+      document.getElementById("pokerBet").disabled = true;
+      document.getElementById("pokerDealBtn").style.display = "none";
+      document.getElementById("pokerDrawBtn").style.display = "block";
+      document.getElementById("pokerHoldRow").style.display = "flex";
+      pokerRenderHand(state.hand);
+      const msg = document.getElementById("pokerResultMsg");
+      msg.textContent = "♻️ Незавершённая раздача восстановлена. Выбери карты для замены.";
+      msg.className = "slots-result-msg";
+    }
+  }).catch(e => console.error("[VBL] poker state check failed:", e.message));
+}
+
+function pokerRenderHand(hand) {
+  hand.forEach((card, i) => {
+    const slot = document.querySelector(`.poker-card-slot[data-i="${i}"]`);
+    slot.innerHTML = "";
+    slot.appendChild(pokerCardEl(card));
+  });
+}
+
+function changePokerBet(delta) {
+  const inp = document.getElementById("pokerBet");
+  inp.value = Math.max(10, Math.min(100000, Number(inp.value) + delta));
+}
+function setPokerBet(val) { document.getElementById("pokerBet").value = val; }
+
+function togglePokerHold(i) {
+  if (!pokerActive || pokerLocked) return;
+  pokerHolds[i] = !pokerHolds[i];
+  const btn = document.querySelector(`.poker-hold-btn[data-i="${i}"]`);
+  const slot = document.querySelector(`.poker-card-slot[data-i="${i}"]`);
+  btn.classList.toggle("active", pokerHolds[i]);
+  slot.classList.toggle("held", pokerHolds[i]);
+}
+
+async function dealPoker() {
+  if (pokerActive) return;
+  const bet = Number(document.getElementById("pokerBet").value);
+  if (!bet || bet < 10) { showToast("Минимальная ставка: 10 VBL", "info"); return; }
+  if (bet > balance)    { showToast("Недостаточно VBL-Coins!", "lose"); return; }
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/poker/deal", "POST", { bet });
+  } catch (e) {
+    showToast(e.message, "lose");
+    return;
+  }
+
+  pokerActive = true;
+  pokerHolds = [false, false, false, false, false];
+  document.querySelectorAll(".poker-hold-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".poker-card-slot").forEach(s => s.classList.remove("held"));
+
+  updateBalanceUI(result.new_balance, null);
+  pokerRenderHand(result.hand);
+
+  document.getElementById("pokerBet").disabled = true;
+  document.getElementById("pokerDealBtn").style.display = "none";
+  document.getElementById("pokerDrawBtn").style.display = "block";
+  document.getElementById("pokerHoldRow").style.display = "flex";
+
+  const msg = document.getElementById("pokerResultMsg");
+  msg.textContent = "Выбери карты, которые хочешь оставить, и нажми «Заменить»";
+  msg.className = "slots-result-msg";
+}
+
+async function drawPoker() {
+  if (!pokerActive || pokerLocked) return;
+  pokerLocked = true;
+  const betForMsg = Number(document.getElementById("pokerBet").value);
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/poker/draw", "POST", { holds: pokerHolds });
+  } catch (e) {
+    showToast(e.message, "lose");
+    pokerLocked = false;
+    return;
+  }
+
+  pokerActive = false;
+  pokerRenderHand(result.hand);
+  updateBalanceUI(result.new_balance, null);
+
+  const msg = document.getElementById("pokerResultMsg");
+  const label = POKER_HAND_LABELS[result.hand_name] || result.hand_name;
+  if (result.win > 0) {
+    msg.textContent = `🎉 ${label} +${fmtNum(result.win)} VBL (×${result.multiplier})`;
+    msg.className = "slots-result-msg win-msg";
+    showToast(`🎉 ${label} +${fmtNum(result.win)} VBL`, "win");
+  } else {
+    msg.textContent = `😔 ${label}. −${fmtNum(betForMsg)} VBL`;
+    msg.className = "slots-result-msg lose-msg";
+    showToast(`Не повезло. −${fmtNum(betForMsg)} VBL`, "lose");
+  }
+
+  document.getElementById("pokerDrawBtn").style.display = "none";
+  document.getElementById("pokerDealBtn").style.display = "block";
+  document.getElementById("pokerHoldRow").style.display = "none";
+  document.getElementById("pokerBet").disabled = false;
+  pokerLocked = false;
+}
 
 // ══════════════════════════════════════════
 //  BLACKJACK
