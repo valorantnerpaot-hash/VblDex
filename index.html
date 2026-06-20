@@ -439,6 +439,8 @@
   <button class="back-btn" onclick="goLobby()">← Назад</button>
   <h2 class="screen-title">🚀 Ракетка</h2>
 
+  <div class="crash-history" id="crashHistory"></div>
+
   <div class="crash-canvas-wrap">
     <canvas id="crashCanvas"></canvas>
     <div class="crash-mult-display" id="crashMultDisplay">1.00<span class="crash-mult-x">x</span></div>
@@ -448,10 +450,10 @@
   <div class="crash-controls">
     <div class="bet-section crash-bet-section">
       <div class="bet-label">Ставка (VBL-Coins)</div>
-      <div class="bet-controls">
-        <button class="bet-btn" onclick="setCrashBetMode('min')">MIN</button>
+      <div class="bet-controls crash-bet-controls">
+        <button class="bet-btn crash-minmax-btn" onclick="setCrashBetMode('min')">MIN</button>
         <input class="bet-input" id="crashBet" type="number" value="100" min="10" />
-        <button class="bet-btn" onclick="setCrashBetMode('max')">MAX</button>
+        <button class="bet-btn crash-minmax-btn" onclick="setCrashBetMode('max')">MAX</button>
       </div>
       <div class="bet-presets">
         <button class="preset-btn" onclick="setCrashBet(100)">100</button>
