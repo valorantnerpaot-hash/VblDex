@@ -117,6 +117,7 @@ function openGame(name) {
   if (name === "dice")     initDice();
   if (name === "roulette") initRoulette();
   if (name === "mines")    initMines();
+  if (name === "blackjack") initBlackjack();
 }
 
 function goLobby() {
@@ -902,3 +903,197 @@ async function cashoutMines() {
 }
 
 init();
+
+// ══════════════════════════════════════════
+//  BLACKJACK
+// ══════════════════════════════════════════
+
+let bjActive  = false;
+let bjLocked  = false;
+
+function bjCardEl(card, hidden = false) {
+  const el = document.createElement("div");
+  if (hidden) {
+    el.className = "bj-card bj-card-back";
+    return el;
+  }
+  const [rank, suit] = card;
+  const isRed = (suit === "♥" || suit === "♦");
+  el.className = "bj-card" + (isRed ? " bj-card-red" : "");
+  el.innerHTML = `
+    <span class="bj-card-corner bj-card-corner-tl">${rank}<br>${suit}</span>
+    <span class="bj-card-suit-big">${suit}</span>
+    <span class="bj-card-corner bj-card-corner-br">${rank}<br>${suit}</span>
+  `;
+  return el;
+}
+
+function bjRenderHands(playerCards, dealerCards, dealerHidden) {
+  const pEl = document.getElementById("bjPlayerCards");
+  const dEl = document.getElementById("bjDealerCards");
+  pEl.innerHTML = "";
+  dEl.innerHTML = "";
+  playerCards.forEach(c => pEl.appendChild(bjCardEl(c)));
+  if (dealerHidden) {
+    dEl.appendChild(bjCardEl(dealerCards[0]));
+    dEl.appendChild(bjCardEl(null, true));
+  } else {
+    dealerCards.forEach(c => dEl.appendChild(bjCardEl(c)));
+  }
+}
+
+async function initBlackjack() {
+  bjActive = false;
+  bjLocked = false;
+  document.getElementById("bjPlayerCards").innerHTML = "";
+  document.getElementById("bjDealerCards").innerHTML = "";
+  document.getElementById("bjPlayerTotal").textContent = "";
+  document.getElementById("bjDealerTotal").textContent = "";
+  document.getElementById("bjResultMsg").textContent = "";
+  document.getElementById("bjResultMsg").className = "slots-result-msg";
+  document.getElementById("bjStartBtn").style.display = "block";
+  document.getElementById("bjActions").style.display = "none";
+  document.getElementById("bjBet").disabled = false;
+
+  try {
+    const state = await apiFetch("/api/play/blackjack/state", "GET");
+    if (state.active) {
+      bjActive = true;
+      document.getElementById("bjBet").value = state.bet;
+      document.getElementById("bjBet").disabled = true;
+      document.getElementById("bjStartBtn").style.display = "none";
+      document.getElementById("bjActions").style.display = "flex";
+      bjRenderHands(state.player, [state.dealer_up], true);
+      document.getElementById("bjPlayerTotal").textContent = `Игрок: ${state.player_total}`;
+      document.getElementById("bjDealerTotal").textContent = `Дилер: ${bjCardValueDisplay(state.dealer_up)} + ?`;
+      const msg = document.getElementById("bjResultMsg");
+      msg.textContent = "♻️ Незавершённая раздача восстановлена.";
+      msg.className = "slots-result-msg";
+    }
+  } catch(e) {
+    console.error("[VBL] blackjack state check failed:", e.message);
+  }
+}
+
+function bjCardValueDisplay(card) {
+  return card[0];
+}
+
+function changeBjBet(delta) {
+  const inp = document.getElementById("bjBet");
+  inp.value = Math.max(10, Math.min(100000, Number(inp.value) + delta));
+}
+function setBjBet(val) { document.getElementById("bjBet").value = val; }
+
+function bjShowFinal(result, betForMsg) {
+  bjActive = false;
+  bjRenderHands(result.player, result.dealer, false);
+  document.getElementById("bjPlayerTotal").textContent = `Игрок: ${result.player_total}`;
+  document.getElementById("bjDealerTotal").textContent = `Дилер: ${result.dealer_total}`;
+  updateBalanceUI(result.new_balance, null);
+
+  const msg = document.getElementById("bjResultMsg");
+  if (result.outcome === "blackjack") {
+    msg.textContent = `🎉 БЛЭКДЖЕК! +${fmtNum(result.win)} VBL`;
+    msg.className = "slots-result-msg win-msg";
+    showToast(`🎉 Блэкджек! +${fmtNum(result.win)} VBL`, "win");
+  } else if (result.outcome === "win") {
+    msg.textContent = `🎉 Победа! +${fmtNum(result.win)} VBL`;
+    msg.className = "slots-result-msg win-msg";
+    showToast(`🎉 Победа! +${fmtNum(result.win)} VBL`, "win");
+  } else if (result.outcome === "push") {
+    msg.textContent = `🤝 Ничья. Ставка возвращена.`;
+    msg.className = "slots-result-msg";
+    showToast(`🤝 Ничья — ставка возвращена`, "info");
+  } else {
+    msg.textContent = `😔 Проигрыш. −${fmtNum(betForMsg)} VBL`;
+    msg.className = "slots-result-msg lose-msg";
+    showToast(`Проигрыш. −${fmtNum(betForMsg)} VBL`, "lose");
+  }
+
+  document.getElementById("bjActions").style.display = "none";
+  document.getElementById("bjStartBtn").style.display = "block";
+  document.getElementById("bjBet").disabled = false;
+}
+
+async function startBlackjackGame() {
+  if (bjActive) return;
+  const bet = Number(document.getElementById("bjBet").value);
+  if (!bet || bet < 10) { showToast("Минимальная ставка: 10 VBL", "info"); return; }
+  if (bet > balance)    { showToast("Недостаточно VBL-Coins!", "lose"); return; }
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/blackjack/start", "POST", { bet });
+  } catch(e) {
+    showToast(e.message, "lose");
+    return;
+  }
+
+  document.getElementById("bjBet").disabled = true;
+  document.getElementById("bjStartBtn").style.display = "none";
+
+  if (result.status === "finished") {
+    // Натуральный блэкджек у игрока — раздача сразу завершена
+    bjActive = false;
+    bjShowFinal(result, bet);
+    return;
+  }
+
+  bjActive = true;
+  updateBalanceUI(result.new_balance, null);
+  bjRenderHands(result.player, [result.dealer_up], true);
+  document.getElementById("bjPlayerTotal").textContent = `Игрок: ${result.player_total}`;
+  document.getElementById("bjDealerTotal").textContent = `Дилер: ${bjCardValueDisplay(result.dealer_up)} + ?`;
+  document.getElementById("bjActions").style.display = "flex";
+
+  const msg = document.getElementById("bjResultMsg");
+  msg.textContent = "Хит или стенд?";
+  msg.className = "slots-result-msg";
+}
+
+async function bjHit() {
+  if (!bjActive || bjLocked) return;
+  bjLocked = true;
+  const bet = Number(document.getElementById("bjBet").value);
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/blackjack/hit", "POST", {});
+  } catch(e) {
+    showToast(e.message, "lose");
+    bjLocked = false;
+    return;
+  }
+
+  if (result.status === "finished") {
+    bjShowFinal(result, bet);
+    bjLocked = false;
+    return;
+  }
+
+  const pEl = document.getElementById("bjPlayerCards");
+  pEl.innerHTML = "";
+  result.player.forEach(c => pEl.appendChild(bjCardEl(c)));
+  document.getElementById("bjPlayerTotal").textContent = `Игрок: ${result.player_total}`;
+
+  bjLocked = false;
+}
+
+async function bjStand() {
+  if (!bjActive || bjLocked) return;
+  bjLocked = true;
+  const bet = Number(document.getElementById("bjBet").value);
+
+  let result;
+  try {
+    result = await apiFetch("/api/play/blackjack/stand", "POST", {});
+  } catch(e) {
+    showToast(e.message, "lose");
+    bjLocked = false;
+    return;
+  }
+
+  bjShowFinal(result, bet);
+  bjLocked = false;
+}
