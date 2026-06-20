@@ -120,11 +120,14 @@ function openGame(name) {
   if (name === "mines")    initMines();
   if (name === "blackjack") initBlackjack();
   if (name === "poker")    initPoker();
+  if (name === "crash")    initCrash();
+  if (name !== "crash")    stopCrash();
 }
 
 function goLobby() {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-lobby").classList.add("active");
+  stopCrash();
 }
 
 let toastTimer;
@@ -1273,4 +1276,393 @@ async function bjStand() {
 
   bjShowFinal(result, bet);
   bjLocked = false;
+}
+
+// ══════════════════════════════════════════
+//  CRASH (Ракетка) — real multiplayer round
+// ══════════════════════════════════════════
+
+const CRASH_K = 0.13; // должно совпадать с CRASH_K на бэкенде
+
+let crashPollTimer   = null;
+let crashAnimFrame    = null;
+let crashState         = null;   // последнее состояние с сервера
+let crashLocalElapsed0 = 0;      // performance.now() в момент последнего sync для phase=flying
+let crashServerElapsed0 = 0;     // elapsed (сек) на сервере в момент последнего sync
+let crashMyBetThisRound = false;
+let crashCashedOutThisRound = false;
+let crashParticles = [];
+let crashShakeUntil = 0;
+let crashCanvasReady = false;
+
+function initCrash() {
+  const canvas = document.getElementById("crashCanvas");
+  resizeCrashCanvas();
+  window.addEventListener("resize", resizeCrashCanvas);
+  crashCanvasReady = true;
+  crashParticles = [];
+
+  document.getElementById("crashBet").value = document.getElementById("crashBet").value || 100;
+
+  crashPollOnce();
+  crashPollTimer = setInterval(crashPollOnce, 450);
+  if (!crashAnimFrame) crashAnimFrame = requestAnimationFrame(crashRenderLoop);
+}
+
+function stopCrash() {
+  if (crashPollTimer) { clearInterval(crashPollTimer); crashPollTimer = null; }
+  if (crashAnimFrame) { cancelAnimationFrame(crashAnimFrame); crashAnimFrame = null; }
+  window.removeEventListener("resize", resizeCrashCanvas);
+}
+
+function resizeCrashCanvas() {
+  const canvas = document.getElementById("crashCanvas");
+  if (!canvas) return;
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = wrap.clientWidth * dpr;
+  canvas.height = wrap.clientHeight * dpr;
+  canvas.style.width  = wrap.clientWidth + "px";
+  canvas.style.height = wrap.clientHeight + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function setCrashBetMode(mode) {
+  const inp = document.getElementById("crashBet");
+  if (mode === "min") {
+    inp.value = 10;
+  } else if (mode === "max") {
+    inp.value = Math.max(10, Math.floor(balance));
+  }
+}
+function setCrashBet(val) { document.getElementById("crashBet").value = val; }
+
+async function crashPollOnce() {
+  let state;
+  try {
+    state = await apiFetch("/api/play/crash/state", "GET");
+  } catch (e) {
+    console.error("[VBL] crash poll failed:", e.message);
+    return;
+  }
+
+  const prevRoundId = crashState ? crashState.round_id : null;
+  crashState = state;
+
+  if (state.phase === "flying") {
+    crashServerElapsed0 = state.elapsed || 0;
+    crashLocalElapsed0  = performance.now();
+  }
+
+  if (prevRoundId !== null && state.round_id !== prevRoundId) {
+    // новый раунд начался — сбрасываем локальный флаг ставки
+    crashMyBetThisRound = false;
+    crashCashedOutThisRound = false;
+    crashParticles = [];
+  }
+
+  if (state.my_bet) {
+    crashMyBetThisRound = true;
+    crashCashedOutThisRound = !!state.my_bet.cashed_out;
+  } else {
+    crashMyBetThisRound = false;
+    crashCashedOutThisRound = false;
+  }
+
+  if (state.phase === "crashed" && !crashShakeWasTriggered) {
+    triggerCrashShake();
+    crashShakeWasTriggered = true;
+  }
+  if (state.phase !== "crashed") crashShakeWasTriggered = false;
+
+  updateCrashUI(state);
+}
+let crashShakeWasTriggered = false;
+
+function triggerCrashShake() {
+  const wrap = document.querySelector(".crash-canvas-wrap");
+  if (!wrap) return;
+  wrap.classList.add("shake");
+  setTimeout(() => wrap.classList.remove("shake"), 300);
+  // взрыв частиц
+  for (let i = 0; i < 26; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 5;
+    crashParticles.push({
+      x: 0.5, y: 0.5, // относительные координаты — пересчитаем при отрисовке
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 1, color: Math.random() > 0.5 ? "#F0C040" : "#E74C3C",
+    });
+  }
+}
+
+function crashLiveMultiplier() {
+  if (!crashState) return 1.0;
+  if (crashState.phase === "waiting") return 1.0;
+  if (crashState.phase === "crashed") return crashState.crash_point || crashState.current_multiplier || 1.0;
+  // flying — интерполируем локально для плавности между поллами
+  const extra = (performance.now() - crashLocalElapsed0) / 1000;
+  const elapsed = crashServerElapsed0 + Math.max(0, extra);
+  let mult = Math.exp(CRASH_K * elapsed);
+  if (crashState.current_multiplier) mult = Math.max(mult, 0); // защита
+  return mult;
+}
+
+function updateCrashUI(state) {
+  const actionBtn  = document.getElementById("crashActionBtn");
+  const actionText = document.getElementById("crashActionText");
+  const actionSub  = document.getElementById("crashActionSub");
+  const banner     = document.getElementById("crashPhaseBanner");
+  const multEl     = document.getElementById("crashMultDisplay");
+
+  multEl.classList.remove("flying", "crashed");
+
+  if (state.phase === "waiting") {
+    banner.textContent = `⏳ Ставки открыты: ${Math.ceil(state.waiting_remaining || 0)}с`;
+    banner.className = "crash-phase-banner waiting";
+
+    if (crashMyBetThisRound) {
+      actionBtn.className = "spin-btn crash-action-btn mode-placed";
+      actionBtn.disabled = true;
+      actionText.textContent = "СТАВКА ПРИНЯТА";
+      actionSub.textContent = "Жди старта раунда…";
+    } else {
+      actionBtn.className = "spin-btn crash-action-btn";
+      actionBtn.disabled = false;
+      actionText.textContent = "СДЕЛАТЬ СТАВКУ";
+      actionSub.textContent = "Ставки принимаются…";
+    }
+  } else if (state.phase === "flying") {
+    banner.textContent = "🚀 Полёт!";
+    banner.className = "crash-phase-banner flying";
+    multEl.classList.add("flying");
+
+    if (crashMyBetThisRound && !crashCashedOutThisRound) {
+      const bet = (crashState.my_bet && crashState.my_bet.bet) || 0;
+      const liveWin = Math.floor(bet * crashLiveMultiplier());
+      actionBtn.className = "spin-btn crash-action-btn mode-cashout";
+      actionBtn.disabled = false;
+      actionText.textContent = `ЗАБРАТЬ ${fmtNum(liveWin)} VBL`;
+      actionSub.textContent = "Жми, пока не поздно!";
+    } else if (crashMyBetThisRound && crashCashedOutThisRound) {
+      actionBtn.className = "spin-btn crash-action-btn mode-placed";
+      actionBtn.disabled = true;
+      const m = crashState.my_bet.cashout_mult;
+      actionText.textContent = `ЗАБРАЛ x${m ? m.toFixed(2) : "—"}`;
+      actionSub.textContent = `+${fmtNum(crashState.my_bet.win || 0)} VBL`;
+    } else {
+      actionBtn.className = "spin-btn crash-action-btn mode-wait";
+      actionBtn.disabled = true;
+      actionText.textContent = "РАКЕТА ЛЕТИТ";
+      actionSub.textContent = "Дождись следующего раунда";
+    }
+  } else if (state.phase === "crashed") {
+    banner.textContent = `💥 Улетела на x${(state.crash_point || 1).toFixed(2)}`;
+    banner.className = "crash-phase-banner crashed";
+    multEl.classList.add("crashed");
+
+    actionBtn.className = "spin-btn crash-action-btn mode-wait";
+    actionBtn.disabled = true;
+    actionText.textContent = "РАУНД ЗАВЕРШЁН";
+    actionSub.textContent = "Новый раунд скоро начнётся…";
+  }
+
+  renderCrashBoard(state);
+}
+
+function renderCrashBoard(state) {
+  const box = document.getElementById("crashBoardRows");
+  const players = state.players || [];
+  if (players.length === 0) {
+    box.innerHTML = '<div class="crash-board-empty">Пока никто не поставил…</div>';
+    return;
+  }
+  const myId = state.my_bet ? state.my_bet.user_id : null;
+  box.innerHTML = players.map(p => {
+    let resultHtml;
+    if (p.status === "won") {
+      resultHtml = `<span class="crash-board-status won">x${(p.cashout_mult || 0).toFixed(2)} · +${fmtNum(p.win || 0)}</span>`;
+    } else if (p.status === "lost") {
+      resultHtml = `<span class="crash-board-status lost">−${fmtNum(p.bet)}</span>`;
+    } else {
+      resultHtml = `<span class="crash-board-status playing">в игре…</span>`;
+    }
+    const isMe = myId && p.user_id === myId;
+    return `<div class="crash-board-row${isMe ? " me" : ""}">
+      <span class="crash-board-name">${escapeHtml(p.username || ("id" + p.user_id))}</span>
+      <span class="crash-board-bet">${fmtNum(p.bet)}</span>
+      ${resultHtml}
+    </div>`;
+  }).join("");
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+async function crashActionClick() {
+  if (!crashState) return;
+
+  if (crashState.phase === "waiting" && !crashMyBetThisRound) {
+    const bet = Number(document.getElementById("crashBet").value);
+    if (!bet || bet < 10) { showToast("Минимальная ставка: 10 VBL", "info"); return; }
+    if (bet > balance) { showToast("Недостаточно VBL-Coins!", "lose"); return; }
+
+    try {
+      const res = await apiFetch("/api/play/crash/bet", "POST", { bet });
+      updateBalanceUI(res.new_balance, null);
+      crashMyBetThisRound = true;
+      showToast(`✅ Ставка ${fmtNum(bet)} VBL принята`, "info");
+      crashPollOnce();
+    } catch (e) {
+      showToast(e.message, "lose");
+    }
+    return;
+  }
+
+  if (crashState.phase === "flying" && crashMyBetThisRound && !crashCashedOutThisRound) {
+    try {
+      const res = await apiFetch("/api/play/crash/cashout", "POST", {});
+      updateBalanceUI(res.new_balance, null);
+      crashCashedOutThisRound = true;
+      showToast(`💰 Забрал x${res.multiplier.toFixed(2)}! +${fmtNum(res.win)} VBL`, "win");
+      crashPollOnce();
+    } catch (e) {
+      showToast(e.message, "lose");
+    }
+  }
+}
+
+// ── Canvas rocket render loop ──
+
+function crashRenderLoop() {
+  crashAnimFrame = requestAnimationFrame(crashRenderLoop);
+  if (!crashCanvasReady) return;
+  const canvas = document.getElementById("crashCanvas");
+  if (!canvas || !canvas.isConnected) return;
+
+  const ctx = canvas.getContext("2d");
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+
+  // фон: космос + неоновая сетка
+  ctx.fillStyle = "#0a0a12";
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = "rgba(155,89,255,0.08)";
+  ctx.lineWidth = 1;
+  const gridStep = 28;
+  for (let x = W % gridStep; x < W; x += gridStep) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = H % gridStep; y < H; y += gridStep) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  const phase = crashState ? crashState.phase : "waiting";
+  const mult = crashLiveMultiplier();
+
+  // обновляем текст множителя
+  const multEl = document.getElementById("crashMultDisplay");
+  if (multEl) {
+    const shown = phase === "waiting" ? "1.00" : mult.toFixed(2);
+    multEl.firstChild.nodeValue = shown;
+  }
+
+  // позиция ракеты — нелинейная кривая (ускоряется к концу)
+  const t = phase === "flying" ? Math.min(1, Math.log(Math.max(mult,1)) / Math.log(50)) : (phase === "crashed" ? 1 : 0);
+  const originX = 24, originY = H - 24;
+  const targetX = W - 36, targetY = 30;
+  const progress = phase === "waiting" ? 0 : Math.min(1, t);
+  // кривая Безье: прогиб вверх для эффекта траектории
+  const curveX = originX + (targetX - originX) * progress;
+  const curveY = originY - (originY - targetY) * Math.pow(progress, 0.7);
+
+  if (phase === "flying" || phase === "waiting") {
+    // светящаяся трасса
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.quadraticCurveTo(originX + (curveX - originX) * 0.5, originY, curveX, curveY);
+    const grad = ctx.createLinearGradient(originX, originY, curveX, curveY);
+    grad.addColorStop(0, "rgba(155,89,255,0.05)");
+    grad.addColorStop(1, "rgba(155,89,255,0.9)");
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = "rgba(155,89,255,0.8)";
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // заливка под кривой
+    ctx.lineTo(curveX, originY);
+    ctx.lineTo(originX, originY);
+    ctx.closePath();
+    const fillGrad = ctx.createLinearGradient(0, targetY, 0, originY);
+    fillGrad.addColorStop(0, "rgba(155,89,255,0.16)");
+    fillGrad.addColorStop(1, "rgba(155,89,255,0.0)");
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+  }
+
+  if (phase !== "crashed") {
+    // покачивание + наклон ракеты по вектору
+    const wobble = Math.sin(performance.now() / 220) * 4;
+    const angle = -Math.atan2(targetY - originY, targetX - originX) * 0.55 - 0.5;
+
+    // шлейф частиц из хвоста
+    if (phase === "flying" && Math.random() < 0.7) {
+      crashParticles.push({
+        x: curveX - Math.cos(angle) * 14, y: curveY + Math.sin(angle) * 14 + wobble,
+        vx: -1.5 - Math.random() * 1.5, vy: 1 + Math.random() * 1.5,
+        life: 1, color: Math.random() > 0.4 ? "#9B59FF" : "#F0C040", trail: true,
+      });
+    }
+
+    ctx.save();
+    ctx.translate(curveX, curveY + wobble);
+    ctx.rotate(angle);
+    ctx.font = "26px serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.shadowBlur = 16; ctx.shadowColor = "rgba(155,89,255,0.9)";
+    ctx.fillText("🚀", 0, 0);
+    ctx.restore();
+  }
+
+  // частицы
+  for (let i = crashParticles.length - 1; i >= 0; i--) {
+    const p = crashParticles[i];
+    if (p.trail) {
+      p.x += p.vx; p.y += p.vy; p.life -= 0.035;
+    } else {
+      // взрыв-частицы используют относительные координаты от точки краша
+      if (p.exploded === undefined) { p.ex = curveX; p.ey = curveY; p.exploded = true; }
+      p.ex += p.vx; p.ey += p.vy; p.vy += 0.12; p.life -= 0.025;
+    }
+    if (p.life <= 0) { crashParticles.splice(i, 1); continue; }
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    const px = p.trail ? p.x : p.ex;
+    const py = p.trail ? p.y : p.ey;
+    ctx.beginPath();
+    ctx.arc(px, py, p.trail ? 2.5 : 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  if (phase === "crashed") {
+    // финальная вспышка взрыва на застывшей позиции
+    ctx.save();
+    ctx.translate(curveX, curveY);
+    const flashR = 26;
+    const flashGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, flashR);
+    flashGrad.addColorStop(0, "rgba(255,220,150,0.9)");
+    flashGrad.addColorStop(0.5, "rgba(231,76,60,0.5)");
+    flashGrad.addColorStop(1, "rgba(231,76,60,0)");
+    ctx.fillStyle = flashGrad;
+    ctx.beginPath(); ctx.arc(0, 0, flashR, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
 }
