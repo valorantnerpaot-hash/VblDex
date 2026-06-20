@@ -139,7 +139,28 @@
   <h2 class="screen-title">🎲 Кости</h2>
 
   <div class="dice-arena">
-    <canvas id="diceCanvas" width="200" height="200"></canvas>
+    <div class="dice-scene">
+      <div class="dice-cube" id="diceCube">
+        <div class="dice-face front">
+          <div class="dots d1"><span></span></div>
+        </div>
+        <div class="dice-face back">
+          <div class="dots d6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="dice-face right">
+          <div class="dots d3"><span></span><span></span><span></span></div>
+        </div>
+        <div class="dice-face left">
+          <div class="dots d4"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="dice-face top">
+          <div class="dots d2"><span></span><span></span></div>
+        </div>
+        <div class="dice-face bottom">
+          <div class="dots d5"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
     <div class="dice-result-display" id="diceResultDisplay">?</div>
   </div>
 
