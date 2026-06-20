@@ -930,3 +930,55 @@ html, body {
 .crash-board-status.playing { color: var(--violet); }
 .crash-board-status.won     { color: var(--emerald); }
 .crash-board-status.lost    { color: var(--red); }
+
+/* ── Crash: fix MIN/MAX button overflow on narrow screens ── */
+.crash-bet-controls {
+  flex-wrap: nowrap;
+}
+.crash-bet-controls .bet-input {
+  min-width: 0; /* критично: без этого input не сжимается во flex и выталкивает кнопку MAX вправо */
+  flex: 1 1 auto;
+}
+.crash-minmax-btn {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (max-width: 380px) {
+  .crash-minmax-btn { padding: 0 9px; font-size: 12px; }
+}
+
+/* ── Crash: history strip ── */
+.crash-history {
+  width: 100%; max-width: 420px;
+  display: flex; gap: 6px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  -ms-overflow-style: none; scrollbar-width: none;
+}
+.crash-history::-webkit-scrollbar { display: none; }
+.crash-history-empty {
+  font-size: 12px; color: var(--muted); padding: 4px 6px;
+}
+.crash-history-pill {
+  flex: 0 0 auto;
+  font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 13px;
+  padding: 5px 10px; border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* ── Crash: multiplier tier colors ── */
+.crash-mult-display.tier-blue   { color: #4FC3F7; text-shadow: 0 0 24px rgba(79,195,247,0.7); }
+.crash-mult-display.tier-violet { color: var(--violet); text-shadow: 0 0 24px rgba(155,89,255,0.7); }
+.crash-mult-display.tier-gold   { color: var(--gold);   text-shadow: 0 0 26px rgba(240,192,64,0.75); }
+.crash-mult-display.tier-red    { color: var(--red);    text-shadow: 0 0 28px rgba(231,76,60,0.85); }
+
+.crash-history-pill.tier-blue   { color: #4FC3F7; }
+.crash-history-pill.tier-violet { color: var(--violet); }
+.crash-history-pill.tier-gold   { color: var(--gold); }
+.crash-history-pill.tier-red    { color: var(--red); }
