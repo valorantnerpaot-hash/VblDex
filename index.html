@@ -101,6 +101,16 @@
       <div class="game-badge new">✨ Новинка</div>
     </div>
 
+    <div class="game-card" onclick="openGame('crash')">
+      <div class="game-card-glow purple"></div>
+      <div class="game-icon">🚀</div>
+      <div class="game-card-info">
+      <div class="game-name">Ракетка</div>
+      <div class="game-sub">До x1000 — успей забрать</div>
+      </div>
+      <div class="game-badge hot">🔥 Хит</div>
+    </div>
+
   </div>
 </div>
 
@@ -421,6 +431,51 @@
     <div class="paytable-row"><span>Сет</span><span class="pt-mult">×3</span></div>
     <div class="paytable-row"><span>Две пары</span><span class="pt-mult">×2</span></div>
     <div class="paytable-row"><span>Пара В-В и выше</span><span class="pt-mult">×1</span></div>
+  </div>
+</div>
+
+<!-- CRASH GAME (Ракетка) -->
+<div class="screen" id="screen-crash">
+  <button class="back-btn" onclick="goLobby()">← Назад</button>
+  <h2 class="screen-title">🚀 Ракетка</h2>
+
+  <div class="crash-canvas-wrap">
+    <canvas id="crashCanvas"></canvas>
+    <div class="crash-mult-display" id="crashMultDisplay">1.00<span class="crash-mult-x">x</span></div>
+    <div class="crash-phase-banner" id="crashPhaseBanner"></div>
+  </div>
+
+  <div class="crash-controls">
+    <div class="bet-section crash-bet-section">
+      <div class="bet-label">Ставка (VBL-Coins)</div>
+      <div class="bet-controls">
+        <button class="bet-btn" onclick="setCrashBetMode('min')">MIN</button>
+        <input class="bet-input" id="crashBet" type="number" value="100" min="10" />
+        <button class="bet-btn" onclick="setCrashBetMode('max')">MAX</button>
+      </div>
+      <div class="bet-presets">
+        <button class="preset-btn" onclick="setCrashBet(100)">100</button>
+        <button class="preset-btn" onclick="setCrashBet(500)">500</button>
+        <button class="preset-btn" onclick="setCrashBet(1000)">1К</button>
+        <button class="preset-btn" onclick="setCrashBet(5000)">5К</button>
+        <button class="preset-btn" onclick="setCrashBet(10000)">10К</button>
+      </div>
+    </div>
+
+    <button class="spin-btn crash-action-btn" id="crashActionBtn" onclick="crashActionClick()">
+      <span class="spin-btn-text" id="crashActionText">СДЕЛАТЬ СТАВКУ</span>
+      <span class="spin-btn-sub" id="crashActionSub">Ставки принимаются…</span>
+    </button>
+  </div>
+
+  <div class="crash-board">
+    <div class="crash-board-title">🎮 Игроки в раунде</div>
+    <div class="crash-board-head">
+      <span>Игрок</span><span>Ставка</span><span>Результат</span>
+    </div>
+    <div class="crash-board-rows" id="crashBoardRows">
+      <div class="crash-board-empty">Пока никто не поставил…</div>
+    </div>
   </div>
 </div>
 
