@@ -63,12 +63,12 @@
       <div class="game-badge new">✨ Новинка</div>
     </div>
 
-    <div class="game-card locked">
+    <div class="game-card" onclick="openGame('blackjack')">
       <div class="game-card-glow dark"></div>
       <div class="game-icon">🃏</div>
       <div class="game-name">Блэкджек</div>
-      <div class="game-sub">Скоро</div>
-      <div class="game-badge soon">🔒 Скоро</div>
+      <div class="game-sub">x2 победа, x7 блэкджек</div>
+      <div class="game-badge new">✨ Новинка</div>
     </div>
 
   </div>
@@ -259,6 +259,54 @@
     <span class="spin-btn-text">ЗАБРАТЬ</span>
     <span class="spin-btn-sub">Зафиксировать текущий выигрыш</span>
   </button>
+</div>
+
+<!-- BLACKJACK GAME -->
+<div class="screen" id="screen-blackjack">
+  <button class="back-btn" onclick="goLobby()">← Назад</button>
+  <h2 class="screen-title">🃏 Блэкджек</h2>
+
+  <div class="bj-table">
+    <div class="bj-hand-block">
+      <div class="bj-hand-label" id="bjDealerTotal">Дилер</div>
+      <div class="bj-cards" id="bjDealerCards"></div>
+    </div>
+    <div class="bj-hand-block">
+      <div class="bj-hand-label" id="bjPlayerTotal">Игрок</div>
+      <div class="bj-cards" id="bjPlayerCards"></div>
+    </div>
+  </div>
+
+  <div class="slots-result-msg" id="bjResultMsg"></div>
+
+  <div class="bet-section">
+    <div class="bet-label">Ставка (VBL-Coins)</div>
+    <div class="bet-controls">
+      <button class="bet-btn" onclick="changeBjBet(-500)">−500</button>
+      <input class="bet-input" id="bjBet" type="number" value="100" min="10" max="100000" />
+      <button class="bet-btn" onclick="changeBjBet(500)">+500</button>
+    </div>
+    <div class="bet-presets">
+      <button class="preset-btn" onclick="setBjBet(100)">100</button>
+      <button class="preset-btn" onclick="setBjBet(500)">500</button>
+      <button class="preset-btn" onclick="setBjBet(1000)">1К</button>
+      <button class="preset-btn" onclick="setBjBet(5000)">5К</button>
+    </div>
+  </div>
+
+  <button class="spin-btn" id="bjStartBtn" onclick="startBlackjackGame()">
+    <span class="spin-btn-text">РАЗДАТЬ</span>
+    <span class="spin-btn-sub">x2 победа, x7 блэкджек</span>
+  </button>
+
+  <div class="bj-actions" id="bjActions" style="display:none;">
+    <button class="spin-btn emerald" onclick="bjHit()">
+      <span class="spin-btn-text">ХИТ</span>
+    </button>
+    <button class="spin-btn gold" onclick="bjStand()">
+      <span class="spin-btn-text">СТЕНД</span>
+    </button>
+  </div>
 </div>
 
 <!-- TOAST -->
