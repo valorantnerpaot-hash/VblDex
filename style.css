@@ -470,7 +470,68 @@ html, body {
   .game-name  { font-size: 16px; }
 }
 
-/* ══════════════ MINES ══════════════ */
+/* ══════════════ BLACKJACK ══════════════ */
+.bj-table {
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; gap: 18px;
+  margin-bottom: 8px;
+}
+
+.bj-hand-block { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+.bj-hand-label {
+  font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 15px;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+
+.bj-cards {
+  display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  min-height: 84px;
+}
+
+.bj-card {
+  width: 56px; height: 80px;
+  background: #f4f1ea;
+  border-radius: 8px;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.06) inset;
+  color: #1c1c2e;
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  animation: bj-deal 0.25s ease;
+}
+
+@keyframes bj-deal {
+  from { transform: translateY(-14px) scale(0.9); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.bj-card.bj-card-red { color: #C0392B; }
+
+.bj-card-corner {
+  position: absolute; font-size: 11px; line-height: 1.05; text-align: center;
+}
+.bj-card-corner-tl { top: 5px; left: 6px; }
+.bj-card-corner-br { bottom: 5px; right: 6px; transform: rotate(180deg); }
+
+.bj-card-suit-big { font-size: 24px; opacity: 0.85; }
+
+.bj-card-back {
+  background: linear-gradient(135deg, var(--violet), #2A1A4A 60%, #14102A);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4), 0 0 0 2px rgba(240,192,64,0.25) inset;
+}
+.bj-card-back::after {
+  content: "♠";
+  font-size: 22px;
+  color: rgba(240,192,64,0.35);
+}
+
+.bj-actions {
+  display: flex; gap: 10px;
+  width: 100%; max-width: 360px;
+}
+.bj-actions .spin-btn { flex: 1; }
 .mines-mult-display {
   font-family: 'Rajdhani', sans-serif; font-size: 32px; font-weight: 700;
   color: var(--gold);
