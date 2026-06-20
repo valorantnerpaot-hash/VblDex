@@ -704,15 +704,7 @@ async function initMines() {
   minesCurrentMult = 1.0;
   minesNextMult    = null;
 
-  const grid = document.getElementById("minesGrid");
-  grid.innerHTML = "";
-  for (let i = 0; i < 25; i++) {
-    const cell = document.createElement("div");
-    cell.className = "mines-cell";
-    cell.dataset.index = i;
-    cell.onclick = () => revealMineCell(i, cell);
-    grid.appendChild(cell);
-  }
+  renderMinesGrid();
 
   document.getElementById("minesResultMsg").textContent = "";
   document.getElementById("minesResultMsg").className = "slots-result-msg";
@@ -756,6 +748,18 @@ async function initMines() {
   }
 }
 
+function renderMinesGrid() {
+  const grid = document.getElementById("minesGrid");
+  grid.innerHTML = "";
+  for (let i = 0; i < 25; i++) {
+    const cell = document.createElement("div");
+    cell.className = "mines-cell";
+    cell.dataset.index = i;
+    cell.onclick = () => revealMineCell(i, cell);
+    grid.appendChild(cell);
+  }
+}
+
 function changeMinesBet(delta) {
   const inp = document.getElementById("minesBet");
   inp.value = Math.max(10, Math.min(100000, Number(inp.value) + delta));
@@ -788,6 +792,8 @@ async function startMinesGame() {
   minesOpened = new Set();
   minesNextMult = result.next_multiplier;
   updateBalanceUI(result.new_balance, null);
+
+  renderMinesGrid();   // ← полностью пересоздаём клетки: убираем mine-safe/mine-hit классы и старые onclick предыдущего раунда
 
   document.getElementById("minesStartBtn").style.display = "none";
   document.getElementById("minesCashoutBtn").style.display = "block";
@@ -874,6 +880,15 @@ async function cashoutMines() {
   minesActive = false;
   updateBalanceUI(result.new_balance, null);
   document.querySelectorAll(".mines-cell").forEach(c => c.onclick = null);
+
+  // Показываем где были мины — игрок должен видеть, что реально стояло на поле
+  (result.mines || []).forEach(i => {
+    const c = document.querySelector(`.mines-cell[data-index="${i}"]`);
+    if (c && !c.classList.contains("mine-safe")) {
+      c.classList.add("mine-revealed");
+      c.textContent = "💣";
+    }
+  });
 
   const msg = document.getElementById("minesResultMsg");
   msg.textContent = `💰 Забрал x${result.multiplier.toFixed(2)}! +${fmtNum(result.win)} VBL`;
