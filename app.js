@@ -1836,14 +1836,16 @@ async function pvpBjStand() {
 // ── Полинг ──
 function pvpStartPoll() {
   pvpStopPoll();
-  pvpPollTimer = setInterval(pvpPollOnce, 300);
+  // В лобби обновляем комнаты раз в 3 сек, в игре — каждые 300мс
+  const interval = (pvpPhase === "lobby") ? 3000 : 300;
+  pvpPollTimer = setInterval(pvpPollOnce, interval);
 }
 function pvpStopPoll() {
   if (pvpPollTimer) { clearInterval(pvpPollTimer); pvpPollTimer = null; }
 }
 
 async function pvpPollOnce() {
-  // Если в лобби — обновляем список комнат каждые 3 секунды
+  // Если в лобби — обновляем список комнат
   if (!pvpRoomId && pvpPhase === "lobby") {
     pvpLoadRooms();
     return;
@@ -1855,12 +1857,22 @@ async function pvpPollOnce() {
     if (pvpPhase === "waiting" && res.phase === "playing") {
       // соперник вошёл — переходим к игре
       pvpPhase = "playing";
+      pvpStopPoll();
+      pvpPollTimer = setInterval(pvpPollOnce, 300); // быстрый полинг для игры
       pvpRenderGame(res);
       pvpShow("game");
       return;
     }
-    if (pvpPhase === "playing") {
+    if (pvpPhase === "playing" || pvpPhase === "finished") {
       pvpRenderGame(res);
+      // Если сервер прислал новый раунд (phase=playing) пока мы в finished — стартуем игру
+      if (pvpPhase === "finished" && res.phase === "playing") {
+        pvpPhase = "playing";
+        pvpMyUid = null;
+        pvpLocked = false;
+        pvpRenderGame(res);
+        pvpShow("game");
+      }
     }
   } catch(e) {
     // не прерываем игру из-за одного неудачного полла
@@ -2010,12 +2022,15 @@ async function pvpBjRematch() {
   if (!pvpRoomId) return;
   const btn = document.getElementById("pvpRematchBtn");
   if (btn) btn.disabled = true;
+  pvpLocked = false; // сбрасываем лок на случай если остался с прошлой игры
   try {
     const res = await apiFetch("/api/pvp/bj/rematch", "POST", { room_id: pvpRoomId });
     if (res.phase === "playing") {
       // Оба нажали — игра сразу стартовала
       pvpPhase = "playing";
       pvpMyUid = null; // сбросим, определится заново в pvpRenderGame
+      pvpLocked = false;
+      if (res.new_balance != null) updateBalanceUI(res.new_balance, null);
       pvpRenderGame(res);
       pvpShow("game");
       pvpStartPoll();
@@ -2050,15 +2065,17 @@ function pvpBackToLobby() {
 // ── Кнопка "← Назад" — если в ожидании — отменяем, иначе просто уходим ──
 async function pvpBjLeaveAndGoLobby() {
   pvpStopPoll();
-  if (pvpPhase === "waiting" && pvpRoomId) {
+  // Сообщаем серверу об уходе из любой фазы (waiting / playing / finished)
+  if (pvpRoomId) {
     try {
       const res = await apiFetch("/api/pvp/bj/leave", "POST", { room_id: pvpRoomId });
-      updateBalanceUI(res.new_balance, null);
+      if (res.new_balance != null) updateBalanceUI(res.new_balance, null);
     } catch(e) {}
   }
   pvpRoomId = null;
   pvpMyUid  = null;
   pvpPhase  = null;
+  pvpLocked = false;
   goLobby();
 }
 
