@@ -1957,6 +1957,9 @@ function pvpRenderGame(state) {
 
   // Результат
   const msgEl = document.getElementById("pvpResultMsg");
+  const rematchEl = document.getElementById("pvpRematchBtn");
+  const rematchHintEl = document.getElementById("pvpRematchHint");
+
   if (state.phase === "finished") {
     pvpStopPoll();
     pvpPhase = "finished";
@@ -1964,14 +1967,67 @@ function pvpRenderGame(state) {
     const isPush   = !state.winner;
     msgEl.textContent  = state.result_text || "Игра завершена";
     msgEl.className    = `slots-result-msg ${isWinner ? "win" : isPush ? "" : "lose"}`;
-    fetchBalance(); // обновляем баланс после завершения
+    fetchBalance();
+
+    // Показываем кнопку ремача
+    if (rematchEl) rematchEl.style.display = "block";
+
+    // Подсказка кто уже нажал
+    const readyList = state.rematch_ready || [];
+    const iReady = readyList.includes(pvpMyUid);
+    if (rematchEl) rematchEl.disabled = iReady;
+    if (rematchHintEl) {
+      if (readyList.length === 0) {
+        rematchHintEl.textContent = "";
+      } else if (iReady) {
+        rematchHintEl.textContent = "⏳ Ждём соперника…";
+      } else {
+        rematchHintEl.textContent = "☠ Соперник хочет реванш!";
+      }
+    }
+
+    // Если оба нажали — полинг подхватит новую игру
+    if (readyList.length < 2) {
+      pvpStartPoll();
+    }
+
   } else if (state.phase === "playing") {
+    // Новый раунд стартовал — скрываем кнопку ремача
+    if (rematchEl) { rematchEl.style.display = "none"; rematchEl.disabled = false; }
+    if (rematchHintEl) rematchHintEl.textContent = "";
+
     if (myDone) {
       msgEl.textContent = "⏳ Ждём соперника…";
       msgEl.className   = "slots-result-msg";
     } else {
       msgEl.textContent = "";
     }
+  }
+}
+
+// ── Камбекнуть — реванш ──
+async function pvpBjRematch() {
+  if (!pvpRoomId) return;
+  const btn = document.getElementById("pvpRematchBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await apiFetch("/api/pvp/bj/rematch", "POST", { room_id: pvpRoomId });
+    if (res.phase === "playing") {
+      // Оба нажали — игра сразу стартовала
+      pvpPhase = "playing";
+      pvpMyUid = null; // сбросим, определится заново в pvpRenderGame
+      pvpRenderGame(res);
+      pvpShow("game");
+      pvpStartPoll();
+    } else {
+      // Ждём соперника — подсказка обновится через полинг
+      const hintEl = document.getElementById("pvpRematchHint");
+      if (hintEl) hintEl.textContent = "⏳ Ждём соперника…";
+      pvpStartPoll();
+    }
+  } catch(e) {
+    showToast(e.message, "lose");
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1983,6 +2039,10 @@ function pvpBackToLobby() {
   pvpPhase   = "lobby";
   pvpLocked  = false;
   document.getElementById("pvpResultMsg").textContent = "";
+  const rematchEl = document.getElementById("pvpRematchBtn");
+  const rematchHintEl = document.getElementById("pvpRematchHint");
+  if (rematchEl) { rematchEl.style.display = "none"; rematchEl.disabled = false; }
+  if (rematchHintEl) rematchHintEl.textContent = "";
   pvpShow("lobby");
   pvpLoadRooms();
 }
