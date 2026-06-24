@@ -1402,12 +1402,13 @@ function triggerCrashShake() {
 function crashLiveMultiplier() {
   if (!crashState) return 1.0;
   if (crashState.phase === "waiting") return 1.0;
-  if (crashState.phase === "crashed") return crashState.crash_point || crashState.current_multiplier || 1.0;
+  if (crashState.phase === "crashed") return crashState.crash_point || 1.0;
   // flying — интерполируем локально для плавности между поллами
   const extra = (performance.now() - crashLocalElapsed0) / 1000;
   const elapsed = crashServerElapsed0 + Math.max(0, extra);
-  let mult = Math.exp(CRASH_K * elapsed);
-  if (crashState.current_multiplier) mult = Math.max(mult, 0); // защита
+  const mult = Math.exp(CRASH_K * elapsed);
+  // не превышаем crash_point если уже известен
+  if (crashState.crash_point) return Math.min(mult, crashState.crash_point);
   return mult;
 }
 
@@ -1530,7 +1531,11 @@ async function crashActionClick() {
     if (bet > balance) { showToast("Недостаточно VBL-Coins!", "lose"); return; }
 
     try {
-      const res = await apiFetch("/api/play/crash/bet", "POST", { bet });
+      const autoEl = document.getElementById("crashAutoEnabled");
+      const autoMult = (autoEl && autoEl.checked)
+        ? parseFloat(document.getElementById("crashAutoMult").value) || null
+        : null;
+      const res = await apiFetch("/api/play/crash/bet", "POST", { bet, auto_cashout: autoMult });
       updateBalanceUI(res.new_balance, null);
       crashMyBetThisRound = true;
       showToast(`✅ Ставка ${fmtNum(bet)} VBL принята`, "info");
@@ -1559,8 +1564,6 @@ async function crashActionClick() {
 function crashRenderLoop() {
   crashAnimFrame = requestAnimationFrame(crashRenderLoop);
   if (!crashCanvasReady) return;
-  // Авто-вывод проверяем каждый кадр (~60fps) — без задержки полинга
-  crashMaybeAutoCashout();
   const canvas = document.getElementById("crashCanvas");
   if (!canvas || !canvas.isConnected) return;
 
