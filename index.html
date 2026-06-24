@@ -111,6 +111,16 @@
       <div class="game-badge hot">🔥 Хит</div>
     </div>
 
+    <div class="game-card" onclick="openGame('pvpbj')">
+      <div class="game-card-glow gold"></div>
+      <div class="game-icon">⚔️</div>
+      <div class="game-card-info">
+      <div class="game-name">БЖ 1v1</div>
+      <div class="game-sub">Блэкджек против игрока</div>
+      </div>
+      <div class="game-badge hot">🔥 PvP</div>
+    </div>
+
   </div>
 </div>
 
@@ -464,6 +474,15 @@
       </div>
     </div>
 
+    <div class="crash-autocashout-row">
+      <label class="crash-autocashout-label">
+        <input type="checkbox" id="crashAutoEnabled" />
+        Авто-вывод на
+      </label>
+      <input class="bet-input crash-auto-input" id="crashAutoMult" type="number" value="2.00" min="1.01" step="0.01" />
+      <span class="crash-autocashout-x">×</span>
+    </div>
+
     <button class="spin-btn crash-action-btn" id="crashActionBtn" onclick="crashActionClick()">
       <span class="spin-btn-text" id="crashActionText">СДЕЛАТЬ СТАВКУ</span>
       <span class="spin-btn-sub" id="crashActionSub">Ставки принимаются…</span>
@@ -478,6 +497,84 @@
     <div class="crash-board-rows" id="crashBoardRows">
       <div class="crash-board-empty">Пока никто не поставил…</div>
     </div>
+  </div>
+</div>
+
+
+<!-- PVP BLACKJACK SCREEN -->
+<div class="screen" id="screen-pvpbj">
+  <button class="back-btn" onclick="pvpBjLeaveAndGoLobby()">← Назад</button>
+  <h2 class="screen-title">⚔️ БЖ 1v1</h2>
+
+  <!-- LOBBY: список комнат -->
+  <div id="pvpLobby">
+    <div class="pvp-section-title">Открытые комнаты</div>
+    <div id="pvpRoomsList" class="pvp-rooms-list">
+      <div class="pvp-empty">Загрузка…</div>
+    </div>
+    <div class="pvp-divider">— или создай свою —</div>
+    <div class="bet-section">
+      <div class="bet-label">Твоя ставка (VBL-Coins)</div>
+      <div class="bet-controls">
+        <button class="bet-btn" onclick="changePvpBet(-500)">−500</button>
+        <input class="bet-input" id="pvpBet" type="number" value="100" min="10" />
+        <button class="bet-btn" onclick="changePvpBet(500)">+500</button>
+      </div>
+      <div class="bet-presets">
+        <button class="preset-btn" onclick="setPvpBet(100)">100</button>
+        <button class="preset-btn" onclick="setPvpBet(500)">500</button>
+        <button class="preset-btn" onclick="setPvpBet(1000)">1К</button>
+        <button class="preset-btn" onclick="setPvpBet(5000)">5К</button>
+      </div>
+    </div>
+    <button class="spin-btn" onclick="pvpBjCreate()">
+      <span class="spin-btn-text">СОЗДАТЬ КОМНАТУ</span>
+      <span class="spin-btn-sub">Жди соперника</span>
+    </button>
+  </div>
+
+  <!-- WAITING: ждём соперника -->
+  <div id="pvpWaiting" style="display:none;">
+    <div class="pvp-waiting-box">
+      <div class="pvp-waiting-icon">⏳</div>
+      <div class="pvp-waiting-title">Ждём соперника…</div>
+      <div class="pvp-waiting-sub" id="pvpWaitingBet"></div>
+      <div class="pvp-room-id" id="pvpWaitingRoomId"></div>
+    </div>
+    <button class="spin-btn" style="background:#e74c3c;margin-top:12px;" onclick="pvpBjCancel()">
+      <span class="spin-btn-text">ОТМЕНИТЬ</span>
+    </button>
+  </div>
+
+  <!-- GAME: идёт игра -->
+  <div id="pvpGame" style="display:none;">
+    <div class="pvp-vs-header">
+      <div class="pvp-player-tag" id="pvpTagMe">Ты</div>
+      <div class="pvp-vs-badge">VS</div>
+      <div class="pvp-player-tag" id="pvpTagOpp">Соперник</div>
+    </div>
+    <div class="pvp-table">
+      <div class="pvp-hand-block">
+        <div class="pvp-hand-label" id="pvpMyLabel">Мои карты</div>
+        <div class="bj-cards" id="pvpMyCards"></div>
+        <div class="pvp-status-badge" id="pvpMyStatus"></div>
+      </div>
+      <div class="pvp-hand-block">
+        <div class="pvp-hand-label" id="pvpOppLabel">Соперник</div>
+        <div class="bj-cards" id="pvpOppCards"></div>
+        <div class="pvp-status-badge" id="pvpOppStatus"></div>
+      </div>
+    </div>
+    <div class="slots-result-msg" id="pvpResultMsg"></div>
+    <div class="bj-actions" id="pvpActions" style="display:none;">
+      <button class="spin-btn emerald" onclick="pvpBjHit()">
+        <span class="spin-btn-text">ХИТ</span>
+      </button>
+      <button class="spin-btn gold" onclick="pvpBjStand()">
+        <span class="spin-btn-text">СТЕНД</span>
+      </button>
+    </div>
+    <div class="pvp-pot-display" id="pvpPotDisplay"></div>
   </div>
 </div>
 
