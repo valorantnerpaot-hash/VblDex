@@ -1836,7 +1836,7 @@ async function pvpBjStand() {
 // ── Полинг ──
 function pvpStartPoll() {
   pvpStopPoll();
-  pvpPollTimer = setInterval(pvpPollOnce, 1500);
+  pvpPollTimer = setInterval(pvpPollOnce, 300);
 }
 function pvpStopPoll() {
   if (pvpPollTimer) { clearInterval(pvpPollTimer); pvpPollTimer = null; }
