@@ -982,3 +982,194 @@ html, body {
 .crash-history-pill.tier-violet { color: var(--violet); }
 .crash-history-pill.tier-gold   { color: var(--gold); }
 .crash-history-pill.tier-red    { color: var(--red); }
+
+/* ══════════════════════════════════════════
+   PvP BLACKJACK
+   ══════════════════════════════════════════ */
+
+.pvp-section-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.pvp-rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.pvp-room-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 10px 14px;
+  gap: 10px;
+}
+
+.pvp-room-info { flex: 1; }
+.pvp-room-host { font-size: 14px; font-weight: 600; color: var(--text, #fff); }
+.pvp-room-bet  { font-size: 12px; color: var(--gold, #f0c040); margin-top: 2px; }
+
+.pvp-room-join-btn {
+  background: linear-gradient(135deg, #9b59ff, #6c3fc5);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pvp-empty {
+  text-align: center;
+  color: var(--text-muted, #888);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.pvp-divider {
+  text-align: center;
+  color: var(--text-muted, #888);
+  font-size: 12px;
+  margin: 10px 0 14px;
+  position: relative;
+}
+
+/* WAITING */
+.pvp-waiting-box {
+  background: rgba(155,89,255,0.08);
+  border: 1px solid rgba(155,89,255,0.25);
+  border-radius: 16px;
+  padding: 24px 16px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.pvp-waiting-icon  { font-size: 36px; margin-bottom: 8px; }
+.pvp-waiting-title { font-size: 18px; font-weight: 700; color: var(--text, #fff); margin-bottom: 4px; }
+.pvp-waiting-sub   { font-size: 14px; color: var(--gold, #f0c040); margin-bottom: 8px; }
+.pvp-room-id {
+  display: inline-block;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  word-break: break-all;
+  margin-top: 6px;
+}
+
+/* VS HEADER */
+.pvp-vs-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pvp-player-tag {
+  background: rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #fff);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pvp-vs-badge {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gold, #f0c040);
+}
+
+/* TABLE */
+.pvp-table {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pvp-hand-block {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 100px;
+}
+.pvp-hand-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pvp-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+  min-height: 20px;
+}
+.pvp-status-badge.playing    { background: rgba(155,89,255,0.2); color: #b07aff; }
+.pvp-status-badge.stand      { background: rgba(240,192,64,0.2);  color: #f0c040; }
+.pvp-status-badge.bust       { background: rgba(231,76,60,0.2);   color: #e74c3c; }
+.pvp-status-badge.blackjack  { background: rgba(46,213,115,0.2);  color: #2ed573; }
+.pvp-status-badge.waiting    { background: rgba(255,255,255,0.06); color: #888; }
+
+.pvp-pot-display {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gold, #f0c040);
+  margin-top: 8px;
+}
+
+/* AUTO-CASHOUT ROW */
+.crash-autocashout-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 10px;
+  flex-wrap: wrap;
+}
+.crash-autocashout-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text, #fff);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crash-autocashout-label input[type=checkbox] {
+  width: 16px; height: 16px; cursor: pointer;
+  accent-color: #9b59ff;
+}
+.crash-auto-input {
+  width: 80px !important;
+  text-align: center;
+}
+.crash-autocashout-x {
+  font-size: 14px;
+  color: var(--text-muted, #888);
+}
