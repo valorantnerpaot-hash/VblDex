@@ -1767,9 +1767,10 @@ async function pvpBjCreate() {
   try {
     const res = await apiFetch("/api/pvp/bj/create", "POST", { bet });
     pvpRoomId = res.room_id;
-    pvpPhase = "waiting";
+    pvpPhase  = "waiting";
+    pvpMyUid  = String(Telegram.WebApp.initDataUnsafe?.user?.id || "");
     updateBalanceUI(res.new_balance, null);
-    document.getElementById("pvpWaitingBet").textContent = `Ставка: ${fmtNum(bet)} VBL`;
+    document.getElementById("pvpWaitingBet").textContent    = `Ставка: ${fmtNum(bet)} VBL`;
     document.getElementById("pvpWaitingRoomId").textContent = `ID: ${pvpRoomId}`;
     pvpShow("waiting");
     pvpStartPoll();
@@ -1783,7 +1784,9 @@ async function pvpBjJoin(roomId) {
   try {
     const res = await apiFetch("/api/pvp/bj/join", "POST", { room_id: roomId });
     pvpRoomId = roomId;
-    pvpPhase = "playing";
+    pvpPhase  = "playing";
+    // Устанавливаем свой uid сразу — не полагаемся на эвристику в pvpRenderGame
+    pvpMyUid  = String(Telegram.WebApp.initDataUnsafe?.user?.id || "");
     updateBalanceUI(res.new_balance, null);
     pvpRenderGame(res);
     pvpShow("game");
@@ -1864,18 +1867,31 @@ async function pvpPollOnce() {
       return;
     }
     if (pvpPhase === "playing" || pvpPhase === "finished") {
+      const phaseBefore = pvpPhase;
       pvpRenderGame(res);
-      // Если сервер прислал новый раунд (phase=playing) пока мы в finished — стартуем игру
-      if (pvpPhase === "finished" && res.phase === "playing") {
+      // Если сервер прислал новый раунд пока мы смотрели экран finished — стартуем игру
+      if (phaseBefore === "finished" && res.phase === "playing") {
         pvpPhase = "playing";
         pvpMyUid = null;
         pvpLocked = false;
+        pvpStopPoll();
+        pvpPollTimer = setInterval(pvpPollOnce, 300);
         pvpRenderGame(res);
         pvpShow("game");
       }
     }
   } catch(e) {
-    // не прерываем игру из-за одного неудачного полла
+    // При 404 — комната исчезла (timeout или удалена)
+    if (e.message && (e.message.includes("404") || e.message.includes("не найдена") || e.message.includes("not found"))) {
+      pvpStopPoll();
+      if (pvpPhase === "waiting") {
+        showToast("⏱ Время ожидания истекло, ставка возвращена", "info");
+        fetchBalance();
+        pvpBackToLobby();
+      }
+      // В playing/finished — оповещаем но не выгоняем принудительно
+    }
+    // Остальные ошибки — игнорируем, не прерываем игру
   }
 }
 
@@ -1909,7 +1925,9 @@ function pvpRenderGame(state) {
 
   // Мои карты — перерисовываем только если изменилось количество
   const myCardsEl = document.getElementById("pvpMyCards");
-  const myHandKey = me ? (me.hand || []).map(c => c[0]+c[1]).join(",") : "";
+  // Добавляем phase и bet в ключ чтобы при ремаче карты точно перерисовались
+  const roundPrefix = `${state.phase}_${state.bet}_`;
+  const myHandKey = me ? roundPrefix + (me.hand || []).map(c => c[0]+c[1]).join(",") : "";
   if (myCardsEl.dataset.handKey !== myHandKey) {
     myCardsEl.dataset.handKey = myHandKey;
     myCardsEl.innerHTML = "";
@@ -1921,8 +1939,8 @@ function pvpRenderGame(state) {
   // Карты соперника — перерисовываем только если изменилось количество или фаза
   const oppCardsEl = document.getElementById("pvpOppCards");
   const oppHandKey = opp ? (state.phase === "finished"
-    ? (opp.hand || []).map(c => c[0]+c[1]).join(",")
-    : "back_" + opp.card_count) : "";
+    ? roundPrefix + (opp.hand || []).map(c => c[0]+c[1]).join(",")
+    : roundPrefix + "back_" + opp.card_count) : "";
   if (oppCardsEl.dataset.handKey !== oppHandKey) {
     oppCardsEl.dataset.handKey = oppHandKey;
     oppCardsEl.innerHTML = "";
@@ -1998,8 +2016,8 @@ function pvpRenderGame(state) {
       }
     }
 
-    // Если оба нажали — полинг подхватит новую игру
-    if (readyList.length < 2) {
+    // Поллим пока ждём соперника для ремача (только если нет активного таймера)
+    if (readyList.length < 2 && !pvpPollTimer) {
       pvpStartPoll();
     }
 
@@ -2028,7 +2046,7 @@ async function pvpBjRematch() {
     if (res.phase === "playing") {
       // Оба нажали — игра сразу стартовала
       pvpPhase = "playing";
-      pvpMyUid = null; // сбросим, определится заново в pvpRenderGame
+      pvpMyUid = String(Telegram.WebApp.initDataUnsafe?.user?.id || "");
       pvpLocked = false;
       if (res.new_balance != null) updateBalanceUI(res.new_balance, null);
       pvpRenderGame(res);
@@ -2074,8 +2092,20 @@ async function pvpBjLeaveAndGoLobby() {
   }
   pvpRoomId = null;
   pvpMyUid  = null;
-  pvpPhase  = null;
   pvpLocked = false;
+  pvpPhase  = null;
+  // Очищаем UI PvP перед уходом
+  const pvpMsg = document.getElementById("pvpResultMsg");
+  if (pvpMsg) pvpMsg.textContent = "";
+  const pvpRematch = document.getElementById("pvpRematchBtn");
+  if (pvpRematch) { pvpRematch.style.display = "none"; pvpRematch.disabled = false; }
+  const pvpHint = document.getElementById("pvpRematchHint");
+  if (pvpHint) pvpHint.textContent = "";
+  // Сбрасываем dataset.handKey чтобы карты перерисовались в следующей игре
+  const myCards = document.getElementById("pvpMyCards");
+  const oppCards = document.getElementById("pvpOppCards");
+  if (myCards)  myCards.dataset.handKey  = "";
+  if (oppCards) oppCards.dataset.handKey = "";
   goLobby();
 }
 
