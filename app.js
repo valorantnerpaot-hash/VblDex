@@ -1379,7 +1379,6 @@ async function crashPollOnce() {
   if (state.phase !== "crashed") crashShakeWasTriggered = false;
 
   updateCrashUI(state);
-  crashMaybeAutoCashout();
 }
 let crashShakeWasTriggered = false;
 
@@ -1560,6 +1559,8 @@ async function crashActionClick() {
 function crashRenderLoop() {
   crashAnimFrame = requestAnimationFrame(crashRenderLoop);
   if (!crashCanvasReady) return;
+  // Авто-вывод проверяем каждый кадр (~60fps) — без задержки полинга
+  crashMaybeAutoCashout();
   const canvas = document.getElementById("crashCanvas");
   if (!canvas || !canvas.isConnected) return;
 
