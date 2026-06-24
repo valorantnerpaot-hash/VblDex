@@ -121,6 +121,7 @@ function openGame(name) {
   if (name === "blackjack") initBlackjack();
   if (name === "poker")    initPoker();
   if (name === "crash")    initCrash();
+  if (name === "pvpbj")   openPvpBj();
   if (name !== "crash")    stopCrash();
 }
 
@@ -1359,6 +1360,7 @@ async function crashPollOnce() {
     // новый раунд начался — сбрасываем локальный флаг ставки
     crashMyBetThisRound = false;
     crashCashedOutThisRound = false;
+    crashAutoTriggered = false;
     crashParticles = [];
   }
 
@@ -1377,6 +1379,7 @@ async function crashPollOnce() {
   if (state.phase !== "crashed") crashShakeWasTriggered = false;
 
   updateCrashUI(state);
+  crashMaybeAutoCashout();
 }
 let crashShakeWasTriggered = false;
 
@@ -1685,5 +1688,322 @@ function crashRenderLoop() {
     ctx.fillStyle = flashGrad;
     ctx.beginPath(); ctx.arc(0, 0, flashR, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+  }
+}
+
+
+// ══════════════════════════════════════════
+//  PvP BLACKJACK 1v1
+// ══════════════════════════════════════════
+
+let pvpRoomId       = null;   // текущая комната
+let pvpMyUid        = null;   // мой user_id (строка)
+let pvpPhase        = null;   // "lobby" | "waiting" | "playing" | "finished"
+let pvpPollTimer    = null;
+let pvpLocked       = false;
+
+function pvpShow(section) {
+  document.getElementById("pvpLobby").style.display   = section === "lobby"   ? "" : "none";
+  document.getElementById("pvpWaiting").style.display = section === "waiting" ? "" : "none";
+  document.getElementById("pvpGame").style.display    = section === "game"    ? "" : "none";
+}
+
+function changePvpBet(d) {
+  const el = document.getElementById("pvpBet");
+  el.value = Math.max(10, (Number(el.value) || 100) + d);
+}
+function setPvpBet(v) { document.getElementById("pvpBet").value = v; }
+
+// ── Открываем экран PvP ──
+function openPvpBj() {
+  pvpPhase = "lobby";
+  pvpRoomId = null;
+  pvpMyUid = null;
+  pvpShow("lobby");
+  pvpLoadRooms();
+}
+
+// ── Список комнат ──
+async function pvpLoadRooms() {
+  const box = document.getElementById("pvpRoomsList");
+  try {
+    const res = await apiFetch("/api/pvp/bj/rooms", "GET");
+    const rooms = res.rooms || [];
+    if (rooms.length === 0) {
+      box.innerHTML = '<div class="pvp-empty">Нет открытых комнат — создай свою!</div>';
+    } else {
+      box.innerHTML = rooms.map(r => `
+        <div class="pvp-room-card">
+          <div class="pvp-room-info">
+            <div class="pvp-room-host">${escapeHtml(r.host)}</div>
+            <div class="pvp-room-bet">💰 ${fmtNum(r.bet)} VBL</div>
+          </div>
+          <button class="pvp-room-join-btn" onclick="pvpBjJoin('${escapeHtml(r.room_id)}')">ВОЙТИ</button>
+        </div>`).join("");
+    }
+  } catch(e) {
+    box.innerHTML = '<div class="pvp-empty">Ошибка загрузки комнат</div>';
+  }
+}
+
+// ── Создать комнату ──
+async function pvpBjCreate() {
+  const bet = Number(document.getElementById("pvpBet").value);
+  if (!bet || bet < 10)   { showToast("Минимальная ставка: 10 VBL", "info"); return; }
+  if (bet > balance)      { showToast("Недостаточно VBL-Coins!", "lose"); return; }
+  try {
+    const res = await apiFetch("/api/pvp/bj/create", "POST", { bet });
+    pvpRoomId = res.room_id;
+    pvpPhase = "waiting";
+    updateBalanceUI(res.new_balance, null);
+    document.getElementById("pvpWaitingBet").textContent = `Ставка: ${fmtNum(bet)} VBL`;
+    document.getElementById("pvpWaitingRoomId").textContent = `ID: ${pvpRoomId}`;
+    pvpShow("waiting");
+    pvpStartPoll();
+  } catch(e) {
+    showToast(e.message, "lose");
+  }
+}
+
+// ── Войти в комнату ──
+async function pvpBjJoin(roomId) {
+  try {
+    const res = await apiFetch("/api/pvp/bj/join", "POST", { room_id: roomId });
+    pvpRoomId = roomId;
+    pvpPhase = "playing";
+    updateBalanceUI(res.new_balance, null);
+    pvpRenderGame(res);
+    pvpShow("game");
+    pvpStartPoll();
+  } catch(e) {
+    showToast(e.message, "lose");
+    pvpLoadRooms();
+  }
+}
+
+// ── Отменить ожидание (только хост, пока waiting) ──
+async function pvpBjCancel() {
+  if (!pvpRoomId) { pvpBackToLobby(); return; }
+  try {
+    const res = await apiFetch("/api/pvp/bj/leave", "POST", { room_id: pvpRoomId });
+    updateBalanceUI(res.new_balance, null);
+    showToast("Комната отменена, ставка возвращена", "info");
+  } catch(e) {
+    // игнорируем — всё равно уходим в лобби
+  }
+  pvpBackToLobby();
+}
+
+// ── Хит ──
+async function pvpBjHit() {
+  if (pvpLocked) return;
+  pvpLocked = true;
+  try {
+    const res = await apiFetch("/api/pvp/bj/hit", "POST", { room_id: pvpRoomId });
+    pvpRenderGame(res);
+  } catch(e) {
+    showToast(e.message, "lose");
+  }
+  pvpLocked = false;
+}
+
+// ── Стенд ──
+async function pvpBjStand() {
+  if (pvpLocked) return;
+  pvpLocked = true;
+  try {
+    const res = await apiFetch("/api/pvp/bj/stand", "POST", { room_id: pvpRoomId });
+    pvpRenderGame(res);
+  } catch(e) {
+    showToast(e.message, "lose");
+  }
+  pvpLocked = false;
+}
+
+// ── Полинг ──
+function pvpStartPoll() {
+  pvpStopPoll();
+  pvpPollTimer = setInterval(pvpPollOnce, 1500);
+}
+function pvpStopPoll() {
+  if (pvpPollTimer) { clearInterval(pvpPollTimer); pvpPollTimer = null; }
+}
+
+async function pvpPollOnce() {
+  if (!pvpRoomId) return;
+  try {
+    const res = await apiFetch(`/api/pvp/bj/state?room_id=${encodeURIComponent(pvpRoomId)}`, "GET");
+
+    if (pvpPhase === "waiting" && res.phase === "playing") {
+      // соперник вошёл — переходим к игре
+      pvpPhase = "playing";
+      pvpRenderGame(res);
+      pvpShow("game");
+      return;
+    }
+    if (pvpPhase === "playing") {
+      pvpRenderGame(res);
+    }
+  } catch(e) {
+    // не прерываем игру из-за одного неудачного полла
+  }
+}
+
+// ── Рендер игрового экрана ──
+function pvpRenderGame(state) {
+  const players = state.players || {};
+  const uids    = Object.keys(players);
+
+  // Определяем кто я: если pvpMyUid уже известен — берём его,
+  // иначе ищем по принципу "кто не является единственным чужим"
+  // Сервер шлёт данные обоих, мои карты всегда видны
+  if (!pvpMyUid) {
+    // мои карты — те у кого hand не ["?","?"]
+    for (const uid of uids) {
+      const hand = players[uid].hand || [];
+      if (hand.length > 0 && !(hand[0][0] === "?" && hand[0][1] === "?")) {
+        pvpMyUid = uid;
+        break;
+      }
+    }
+    if (!pvpMyUid && uids.length > 0) pvpMyUid = uids[0];
+  }
+
+  const oppUid = uids.find(u => u !== pvpMyUid) || null;
+  const me     = pvpMyUid ? players[pvpMyUid] : null;
+  const opp    = oppUid   ? players[oppUid]   : null;
+
+  // Имена
+  document.getElementById("pvpTagMe").textContent  = me  ? `@${me.username}`  : "Ты";
+  document.getElementById("pvpTagOpp").textContent = opp ? `@${opp.username}` : "Соперник";
+
+  // Мои карты
+  const myCardsEl = document.getElementById("pvpMyCards");
+  myCardsEl.innerHTML = "";
+  if (me && me.hand) {
+    me.hand.forEach(c => myCardsEl.appendChild(bjCardEl(c)));
+  }
+
+  // Карты соперника
+  const oppCardsEl = document.getElementById("pvpOppCards");
+  oppCardsEl.innerHTML = "";
+  if (opp && opp.hand) {
+    if (state.phase === "finished") {
+      opp.hand.forEach(c => oppCardsEl.appendChild(bjCardEl(c)));
+    } else {
+      // рубашки — столько сколько карт у соперника
+      for (let i = 0; i < opp.card_count; i++) {
+        oppCardsEl.appendChild(bjCardEl(["?","?"]));
+      }
+    }
+  }
+
+  // Подписи сумм
+  const myTotal  = me  && me.total  != null ? ` (${me.total})`  : "";
+  const oppTotal = opp && opp.total != null && state.phase === "finished" ? ` (${opp.total})` : "";
+  document.getElementById("pvpMyLabel").textContent  = `Мои карты${myTotal}`;
+  document.getElementById("pvpOppLabel").textContent = `Соперник${oppTotal}`;
+
+  // Статус-бейджи
+  function renderStatus(el, status) {
+    const labels = {
+      playing:   "🎮 Ходит",
+      stand:     "✋ Стенд",
+      bust:      "💥 Перебор",
+      blackjack: "⭐ Блэкджек",
+      waiting:   "⏳ Ждёт",
+    };
+    el.textContent = labels[status] || "";
+    el.className   = `pvp-status-badge ${status || ""}`;
+  }
+  renderStatus(document.getElementById("pvpMyStatus"),  me  ? me.status  : "waiting");
+  renderStatus(document.getElementById("pvpOppStatus"), opp ? opp.status : "waiting");
+
+  // Банк
+  document.getElementById("pvpPotDisplay").textContent =
+    `💰 Банк: ${fmtNum(state.bet * 2)} VBL (победитель получает 95%)`;
+
+  // Кнопки
+  const actionsEl = document.getElementById("pvpActions");
+  const myDone    = me && ["stand","bust","blackjack"].includes(me.status);
+  actionsEl.style.display = (!myDone && state.phase === "playing") ? "flex" : "none";
+
+  // Результат
+  const msgEl = document.getElementById("pvpResultMsg");
+  if (state.phase === "finished") {
+    pvpStopPoll();
+    pvpPhase = "finished";
+    const isWinner = state.winner === pvpMyUid;
+    const isPush   = !state.winner;
+    msgEl.textContent  = state.result_text || "Игра завершена";
+    msgEl.className    = `slots-result-msg ${isWinner ? "win" : isPush ? "" : "lose"}`;
+    fetchBalance(); // обновляем баланс после завершения
+  } else if (state.phase === "playing") {
+    if (myDone) {
+      msgEl.textContent = "⏳ Ждём соперника…";
+      msgEl.className   = "slots-result-msg";
+    } else {
+      msgEl.textContent = "";
+    }
+  }
+}
+
+// ── Вернуться в лобби PvP ──
+function pvpBackToLobby() {
+  pvpStopPoll();
+  pvpRoomId  = null;
+  pvpMyUid   = null;
+  pvpPhase   = "lobby";
+  pvpLocked  = false;
+  document.getElementById("pvpResultMsg").textContent = "";
+  pvpShow("lobby");
+  pvpLoadRooms();
+}
+
+// ── Кнопка "← Назад" — если в ожидании — отменяем, иначе просто уходим ──
+async function pvpBjLeaveAndGoLobby() {
+  pvpStopPoll();
+  if (pvpPhase === "waiting" && pvpRoomId) {
+    try {
+      const res = await apiFetch("/api/pvp/bj/leave", "POST", { room_id: pvpRoomId });
+      updateBalanceUI(res.new_balance, null);
+    } catch(e) {}
+  }
+  pvpRoomId = null;
+  pvpMyUid  = null;
+  pvpPhase  = null;
+  goLobby();
+}
+
+
+// ══════════════════════════════════════════
+//  CRASH — АВТО-ВЫВОД
+// ══════════════════════════════════════════
+
+// Автовывод: когда flying и множитель >= целевого — автоматически кешаутим
+let crashAutoTriggered = false;
+
+async function crashMaybeAutoCashout() {
+  const enabled = document.getElementById("crashAutoEnabled");
+  if (!enabled || !enabled.checked) return;
+  if (!crashState || crashState.phase !== "flying") return;
+  if (!crashMyBetThisRound || crashCashedOutThisRound) return;
+  if (crashAutoTriggered) return;
+
+  const target = parseFloat(document.getElementById("crashAutoMult").value);
+  if (!target || target < 1.01) return;
+
+  const live = crashLiveMultiplier();
+  if (live >= target) {
+    crashAutoTriggered = true;
+    try {
+      const res = await apiFetch("/api/play/crash/cashout", "POST", {});
+      updateBalanceUI(res.new_balance, null);
+      crashCashedOutThisRound = true;
+      showToast(`🤖 Авто-вывод x${res.multiplier.toFixed(2)}! +${fmtNum(res.win)} VBL`, "win");
+      crashPollOnce();
+    } catch(e) {
+      crashAutoTriggered = false; // попробуем ещё раз если не успел
+    }
   }
 }
