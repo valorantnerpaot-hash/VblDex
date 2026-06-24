@@ -1366,7 +1366,15 @@ async function crashPollOnce() {
 
   if (state.my_bet) {
     crashMyBetThisRound = true;
+    const justAutoCashedOut = !crashCashedOutThisRound && state.my_bet.cashed_out && state.my_bet.cashout_mult;
     crashCashedOutThisRound = !!state.my_bet.cashed_out;
+    // Сервер сам кешаутнул (авто) — обновляем баланс и показываем тост
+    if (justAutoCashedOut) {
+      const mult = state.my_bet.cashout_mult;
+      const win  = state.my_bet.win || 0;
+      showToast(`🤖 Авто-вывод x${mult.toFixed(2)}! +${fmtNum(win)} VBL`, "win");
+      fetchBalance();
+    }
   } else {
     crashMyBetThisRound = false;
     crashCashedOutThisRound = false;
@@ -1725,6 +1733,7 @@ function openPvpBj() {
   pvpMyUid = null;
   pvpShow("lobby");
   pvpLoadRooms();
+  pvpStartPoll(); // обновляем комнаты автоматически
 }
 
 // ── Список комнат ──
@@ -1834,6 +1843,11 @@ function pvpStopPoll() {
 }
 
 async function pvpPollOnce() {
+  // Если в лобби — обновляем список комнат каждые 3 секунды
+  if (!pvpRoomId && pvpPhase === "lobby") {
+    pvpLoadRooms();
+    return;
+  }
   if (!pvpRoomId) return;
   try {
     const res = await apiFetch(`/api/pvp/bj/state?room_id=${encodeURIComponent(pvpRoomId)}`, "GET");
@@ -1881,23 +1895,32 @@ function pvpRenderGame(state) {
   document.getElementById("pvpTagMe").textContent  = me  ? `@${me.username}`  : "Ты";
   document.getElementById("pvpTagOpp").textContent = opp ? `@${opp.username}` : "Соперник";
 
-  // Мои карты
+  // Мои карты — перерисовываем только если изменилось количество
   const myCardsEl = document.getElementById("pvpMyCards");
-  myCardsEl.innerHTML = "";
-  if (me && me.hand) {
-    me.hand.forEach(c => myCardsEl.appendChild(bjCardEl(c)));
+  const myHandKey = me ? (me.hand || []).map(c => c[0]+c[1]).join(",") : "";
+  if (myCardsEl.dataset.handKey !== myHandKey) {
+    myCardsEl.dataset.handKey = myHandKey;
+    myCardsEl.innerHTML = "";
+    if (me && me.hand) {
+      me.hand.forEach(c => myCardsEl.appendChild(bjCardEl(c)));
+    }
   }
 
-  // Карты соперника
+  // Карты соперника — перерисовываем только если изменилось количество или фаза
   const oppCardsEl = document.getElementById("pvpOppCards");
-  oppCardsEl.innerHTML = "";
-  if (opp && opp.hand) {
-    if (state.phase === "finished") {
-      opp.hand.forEach(c => oppCardsEl.appendChild(bjCardEl(c)));
-    } else {
-      // рубашки — столько сколько карт у соперника
-      for (let i = 0; i < opp.card_count; i++) {
-        oppCardsEl.appendChild(bjCardEl(["?","?"]));
+  const oppHandKey = opp ? (state.phase === "finished"
+    ? (opp.hand || []).map(c => c[0]+c[1]).join(",")
+    : "back_" + opp.card_count) : "";
+  if (oppCardsEl.dataset.handKey !== oppHandKey) {
+    oppCardsEl.dataset.handKey = oppHandKey;
+    oppCardsEl.innerHTML = "";
+    if (opp && opp.hand) {
+      if (state.phase === "finished") {
+        opp.hand.forEach(c => oppCardsEl.appendChild(bjCardEl(c)));
+      } else {
+        for (let i = 0; i < opp.card_count; i++) {
+          oppCardsEl.appendChild(bjCardEl(["?","?"]));
+        }
       }
     }
   }
